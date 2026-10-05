@@ -1,5 +1,5 @@
 project parts:
-  Driver + AST = 
-  Skenner (lexer + parser) =
+  Driver + AST = Martin Kolouch (xkoloum00)
+  Skenner (lexer + parser) = Ondřej Vondra (274921)
   Semantics (semantic analysis + symtable + vv-BVS) = Zebrovic (vojtech kabelka)
   CodeGen = FilipK
