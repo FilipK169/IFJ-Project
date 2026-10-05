@@ -1,0 +1,5 @@
+project parts:
+  Driver + AST = 
+  Skenner (lexer + parser) =
+  Semantics (semantic analysis + symtable + vv-BVS) = Zebrovic (vojtech kabelka)
+  CodeGen = FilipK
