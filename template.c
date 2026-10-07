@@ -7,7 +7,7 @@
  *
  * @author Vojtěch Kabelka (xkabelv00)
  * @author Martin Kolouch (xkoloum00)
- * @author Ondřej Vondra (274921)
+ * @author Ondřej Vondra (x274921)
  * @author Filip Kachyňa (xkachyf00)
  */
 
