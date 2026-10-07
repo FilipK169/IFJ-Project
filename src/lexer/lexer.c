@@ -16,14 +16,54 @@
 // ========================================== //
 
 #include "lexer.h"
-
-#include <stdlib.h>
-#include <ctype.h>
-#include <stddef.h>
+#include "token.h"
 
 // ========================================== //
 // ===== PRIVATE CONSTANTS AND TYPEDEFS ===== //
 // ========================================== //
+
+static const t_token_match keywords[] = {
+    {"def", TOKEN_DEF},
+    {"do", TOKEN_DO},
+    {"Double", TOKEN_DOUBLE_TYPE},
+    {"else", TOKEN_ELSE},
+    {"if", TOKEN_IF},
+    {"import", TOKEN_IMPORT},
+    {"Int", TOKEN_INT_TYPE},
+    {"return", TOKEN_RETURN},
+    {"String", TOKEN_STRING_TYPE},
+    {"then", TOKEN_THEN},
+    {"Unit", TOKEN_UNIT},
+    {"val", TOKEN_VAL},
+    {"var", TOKEN_VAR},
+    {"while", TOKEN_WHILE}
+};
+
+/*
+static const t_token_match operators[] = {
+    {"+", TOKEN_PLUS},
+    {"-", TOKEN_MINUS},
+    {"*", TOKEN_MULTIPLY},
+    {"/", TOKEN_DIVIDE},
+    {"<", TOKEN_LESS},
+    {"<=", TOKEN_LESS_EQUAL},
+    {">", TOKEN_GREATER},
+    {">=", TOKEN_GREATER_EQUAL},
+    {"==", TOKEN_EQUAL_EQUAL},
+    {"!=", TOKEN_NOT_EQUAL}
+};
+
+static const t_token_match special_chars[] = {
+    {"=", TOKEN_ASSIGN},
+    {":", TOKEN_COLON},
+    {"@", TOKEN_AT},
+    {".", TOKEN_DOT},
+    {"(", TOKEN_LPAREN},
+    {")", TOKEN_RPAREN},
+    {",", TOKEN_COMMA},
+    {";", TOKEN_SEMICOLON}
+};
+*/
 
 // ========================================== //
 // ============ PRIVATE ENUMS =============== //
@@ -50,7 +90,7 @@ typedef struct {
  *
  * @return The next character from the source file, or EOF if the end of the file is reached.
  */
-static void lexer_char_advance(t_lexeme *lexer);
+static void lexer_char_advance(t_lexer *lexer);
 
 /**
  * @brief Initializes a lexeme buffer.
@@ -98,7 +138,15 @@ static int lexeme_buffer_resize(t_lexeme_buffer *buffer);
  */
 static int lexer_scan_word(t_lexer *lexer, t_token *token);
 
-static int lexer_get_word_type(const char *word, t_token_type *type);
+/**
+ * @brief Determines the type of a word.
+ *
+ * @param[in] word The word to be checked.
+ * @param[out] type The type of the word.
+ *
+ * @return 0 on success, 1 on error.
+ */
+static int lexer_get_word_type(t_token *token);
 
 // ========================================== //
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
@@ -126,8 +174,6 @@ static void lexeme_buffer_destroy(t_lexeme_buffer *buffer) {
     buffer->data = NULL;
     buffer->length = 0;
     buffer->capacity = 0;
-
-    return 0;
 }
 
 static int lexeme_buffer_append(t_lexeme_buffer *buffer, char c) {
@@ -177,42 +223,20 @@ static int lexer_scan_word(t_lexer *lexer, t_token *token) {
 
     token->lexeme = buffer.data;
 
-    return 0;
+    return lexer_get_word_type(token);
 }
 
-static int lexer_get_word_type(const char *word, t_token_type *type) {
-    if (strcmp(word, "def") == 0) {
-        *type = TOKEN_DEF;
-    } else if (strcmp(word, "do") == 0) {
-        *type = TOKEN_DO;
-    } else if (strcmp(word, "Double") == 0) {
-        *type = TOKEN_DOUBLE_TYPE;
-    } else if (strcmp(word, "else") == 0) {
-        *type = TOKEN_ELSE;
-    } else if (strcmp(word, "if") == 0) {
-        *type = TOKEN_IF;
-    } else if (strcmp(word, "import") == 0) {
-        *type = TOKEN_IMPORT;
-    } else if (strcmp(word, "Int") == 0) {
-        *type = TOKEN_INT_TYPE;
-    } else if (strcmp(word, "return") == 0) {
-        *type = TOKEN_RETURN;
-    } else if (strcmp(word, "String") == 0) {
-        *type = TOKEN_STRING_TYPE;
-    } else if (strcmp(word, "then") == 0) {
-        *type = TOKEN_THEN;
-    } else if (strcmp(word, "Unit") == 0) {
-        *type = TOKEN_UNIT;
-    } else if (strcmp(word, "val") == 0) {
-        *type = TOKEN_VAL;
-    } else if (strcmp(word, "var") == 0) {
-        *type = TOKEN_VAR;
-    } else if (strcmp(word, "while") == 0) {
-        *type = TOKEN_WHILE;
-    } else {
-        *type = TOKEN_IDENTIFIER;
+static int lexer_get_word_type(t_token *token) {
+    size_t keyword_count = sizeof(keywords) / sizeof(keywords[0]);
+
+    for (size_t i = 0; i < keyword_count; i++) {
+        if (strcmp(token->lexeme, keywords[i].text) == 0) {
+            token->type = keywords[i].type;
+            return 0;
+        }
     }
 
+    token->type = TOKEN_IDENTIFIER;
     return 0;
 }
 
@@ -246,7 +270,7 @@ int lexer_token_advance(t_lexer *lexer, t_token *token) {
             }
 
             lexer_char_advance(lexer);
-            break;
+            return 0;
 
         case EOF:
             token->type = TOKEN_EOF;

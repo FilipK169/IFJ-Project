@@ -82,4 +82,9 @@ typedef struct {
     bool at_line_start;
 } t_token;
 
+typedef struct {
+    const char *text;
+    t_token_type type;
+} t_token_match;
+
 #endif // TOKEN_H
