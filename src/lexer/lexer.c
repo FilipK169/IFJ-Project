@@ -15,8 +15,12 @@
 // =============== INCLUDES ================= //
 // ========================================== //
 
+#include <ctype.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "lexer.h"
-#include "token.h"
 
 // ========================================== //
 // ===== PRIVATE CONSTANTS AND TYPEDEFS ===== //
@@ -244,7 +248,7 @@ static int lexer_scan_word(t_lexer *lexer, t_token *token) {
 
     token->lexeme = buffer.data;
 
-    // Check if the lexeme is an underscore, which is not a valid identifier in this context
+    // Check if the lexeme is ONLY an underscore, which is not a valid identifier in this context
     if (strcmp(token->lexeme, "_") == 0) {
         token_destroy(token);
         return 1;
