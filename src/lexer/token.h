@@ -1,6 +1,6 @@
 /**
  * @file token.h
- * @brief Rozhraní tokenu
+ * @brief Token interface
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -79,6 +79,7 @@ typedef enum {
 typedef struct {
     t_token_type type;
     char *lexeme;
+    bool at_line_start;
 } t_token;
 
 #endif // TOKEN_H

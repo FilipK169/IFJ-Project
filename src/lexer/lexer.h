@@ -1,6 +1,6 @@
 /**
  * @file lexer.h
- * @brief Rozhraní lexeru
+ * @brief Lexer interface
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -19,6 +19,7 @@
 // ========================================== //
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "token.h"
 
@@ -28,6 +29,8 @@
 
 typedef struct {
     FILE *source;
+    int current_char;
+    bool at_line_start;
 } t_lexer;
 
 // ========================================== //
@@ -35,29 +38,29 @@ typedef struct {
 // ========================================== //
 
 /**
- * @brief Initializuje lexer.
+ * @brief Initializes the lexer with the given source file.
  *
- * @param[in] source Zdrojový soubor, ze kterého bude lexer číst. Je zodpovědností volajícího zajistit, že soubor je otevřený a připravený k čtení.
- * @param[out] lexer Lexer, který bude inicializován.
+ * @param[in] source Source file to be used by the lexer. It is the caller's responsibility to ensure that the file is opened successfully before passing it to this function.
+ * @param[out] lexer Lexer structure to be initialized.
  */
 void lexer_init(t_lexer *lexer, FILE *source);
 
 /**
- * @brief Získá další token ze zdrojového souboru.
+ * @brief Retrieves the next token from the source file.
  *
- * @param[in,out] lexer Ukazatel na strukturu lexeru.
- * @param[out] token Token, do kterého bude uložen získaný token.
+ * @param[in,out] lexer Pointer to the lexer structure.
+ * @param[out] token Token structure to be filled with the next token information.
  *
- * @return 0 při úspěchu, 1 při lexikální chybě
+ * @return 0 on success, 1 on failure.
  */
-int lexer_next_token(t_lexer *lexer, t_token *token);
+int lexer_token_advance(t_lexer *lexer, t_token *token);
 
 
 /**
- * @brief Uvolní paměť alokovanou pro token.
+ * @brief Frees the memory allocated for a token.
  *
- * @param[in,out] token Token, jehož paměť bude uvolněna.
+ * @param[in,out] token Token structure to be freed.
  */
-void token_free(t_token *token);
+void token_destroy(t_token *token);
 
 #endif // LEXER_H
