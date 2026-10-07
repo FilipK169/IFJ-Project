@@ -39,7 +39,6 @@ static const t_token_match keywords[] = {
     {"while", TOKEN_WHILE}
 };
 
-/*
 static const t_token_match operators[] = {
     {"+", TOKEN_PLUS},
     {"-", TOKEN_MINUS},
@@ -63,11 +62,21 @@ static const t_token_match special_chars[] = {
     {",", TOKEN_COMMA},
     {";", TOKEN_SEMICOLON}
 };
-*/
 
 // ========================================== //
 // ============ PRIVATE ENUMS =============== //
 // ========================================== //
+
+/**
+ * @brief Enum for token match types.
+ * Used to specify the type of match to perform when determining the token type based on its lexeme. It helps in categorizing tokens into words or identifiers, operators, or special characters.
+ */
+
+typedef enum {
+    TOKEN_MATCH_WORD,
+    TOKEN_MATCH_OPERATOR,
+    TOKEN_MATCH_SPECIAL_CHAR
+} t_token_match_type;
 
 // ========================================== //
 // ========== PRIVATE STRUCTURES ============ //
@@ -86,16 +95,16 @@ typedef struct {
 /**
  * @brief Gets the next character from the source file.
  *
- * @param[in,out] lexer Pointer to the lexer structure.
+ * @param[in,out] t_lexer Pointer to the lexer structure.
  *
- * @return The next character from the source file, or EOF if the end of the file is reached.
+ * @return The next character from the source file, or EOF if the end of the file is reached. It is stored in the lexer structure for further processing.
  */
 static void lexer_char_advance(t_lexer *lexer);
 
 /**
  * @brief Initializes a lexeme buffer.
  *
- * @param[in,out] buffer Pointer to the buffer to be initialized.
+ * @param[in,out] t_lexeme_buffer Pointer to the buffer to be initialized.
  *
  * @return 0 on success, 1 on error.
  */
@@ -104,14 +113,14 @@ static int lexeme_buffer_init(t_lexeme_buffer *buffer);
 /**
  * @brief Destroys a lexeme buffer.
  *
- * @param[in,out] buffer Pointer to the buffer to be destroyed.
+ * @param[in,out] t_lexeme_buffer Pointer to the buffer to be destroyed.
  */
 static void lexeme_buffer_destroy(t_lexeme_buffer *buffer);
 
 /**
  * @brief Appends a character to a lexeme buffer.
  *
- * @param[in,out] buffer Pointer to the buffer.
+ * @param[in,out] t_lexeme_buffer Pointer to the buffer.
  * @param[in] c Character to be appended.
  *
  * @return 0 on success, 1 on error.
@@ -121,32 +130,44 @@ static int lexeme_buffer_append(t_lexeme_buffer *buffer, char c);
 /**
  * @brief Resizes a buffer.
  *
- * @param[in,out] buffer Pointer to a buffer.
- * @param[in,out] capacity Pointer to the capacity of a buffer.
+ * @param[in,out] lexeme_buffer Pointer to a buffer.
  *
  * @return 0 on success, 1 on error.
  */
 static int lexeme_buffer_resize(t_lexeme_buffer *buffer);
 
 /**
- * @brief Scans a word (identifier or keyword) from the source.
- *
- * @param[in,out] lexer Pointer to the lexer structure.
- * @param[out] token Pointer to the token structure to be filled.
- *
- * @return 0 on success, 1 on error.
+    * @brief Scans a word from the source.
+    * 
+    * @param[in,out] t_lexer Pointer to the lexer structure.
+    * @param[out] t_token Pointer to the token structure to be filled.
+    * 
+    * @return 0 on success, 1 on error.
  */
 static int lexer_scan_word(t_lexer *lexer, t_token *token);
 
 /**
- * @brief Determines the type of a word.
+ * @brief Scans a character from the source.
  *
- * @param[in] word The word to be checked.
- * @param[out] type The type of the word.
+ * @param[in,out] t_lexer Pointer to the lexer structure.
+ * @param[out] t_token Pointer to the token structure to be filled.
+ * @param[in] match_type The type of match to perform once lexer_get_token_type is reached. Words or identifiers, operators, or special characters.
  *
  * @return 0 on success, 1 on error.
  */
-static int lexer_get_word_type(t_token *token);
+static int lexer_scan_char(t_lexer *lexer, t_token *token, t_token_match_type match_type);
+
+/**
+ * @brief Determines the token type based on its lexeme.
+ *
+ * @param[in,out] t_token Pointer to the token structure whose type is to be determined.
+ *
+ * @param[in,out] t_token Pointer to the token structure whose type is to be determined.
+ * @param[in] match_type The type of match to perform. Words or identifiers, operators, or special characters.
+ *
+ * @return 0 on success, 1 on error.
+ */
+static int lexer_get_token_type(t_token *token, t_token_match_type match_type);
 
 // ========================================== //
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
@@ -223,21 +244,68 @@ static int lexer_scan_word(t_lexer *lexer, t_token *token) {
 
     token->lexeme = buffer.data;
 
-    return lexer_get_word_type(token);
+    // Check if the lexeme is an underscore, which is not a valid identifier in this context
+    if (strcmp(token->lexeme, "_") == 0) {
+        token_destroy(token);
+        return 1;
+    }
+
+    return lexer_get_token_type(token, TOKEN_MATCH_WORD);
 }
 
-static int lexer_get_word_type(t_token *token) {
-    size_t keyword_count = sizeof(keywords) / sizeof(keywords[0]);
+static int lexer_scan_char(t_lexer *lexer, t_token *token, t_token_match_type match_type) {
+    token->lexeme = malloc(2);
 
-    for (size_t i = 0; i < keyword_count; i++) {
-        if (strcmp(token->lexeme, keywords[i].text) == 0) {
-            token->type = keywords[i].type;
+    if (token->lexeme == NULL) {
+        return 1;
+    }
+
+    token->lexeme[0] = (char)lexer->current_char;
+    token->lexeme[1] = '\0';
+
+    lexer_char_advance(lexer);
+
+    return lexer_get_token_type(token, match_type);
+}
+
+static int lexer_get_token_type(t_token *token, t_token_match_type match_type)
+{
+    const t_token_match *matches;
+    size_t match_count;
+
+    switch (match_type) {
+        case TOKEN_MATCH_WORD:
+            matches = keywords;
+            match_count = sizeof(keywords) / sizeof(keywords[0]);
+            break;
+
+        case TOKEN_MATCH_OPERATOR:
+            matches = operators;
+            match_count = sizeof(operators) / sizeof(operators[0]);
+            break;
+
+        case TOKEN_MATCH_SPECIAL_CHAR:
+            matches = special_chars;
+            match_count = sizeof(special_chars) / sizeof(special_chars[0]);
+            break;
+
+        default:
+            return 1;
+    }
+
+    for (size_t i = 0; i < match_count; i++) {
+        if (strcmp(token->lexeme, matches[i].text) == 0) {
+            token->type = matches[i].type;
             return 0;
         }
     }
 
-    token->type = TOKEN_IDENTIFIER;
-    return 0;
+    if (match_type == TOKEN_MATCH_WORD) {
+        token->type = TOKEN_IDENTIFIER;
+        return 0;
+    }
+
+    return 1;
 }
 
 // ========================================== //
@@ -256,6 +324,10 @@ int lexer_token_advance(t_lexer *lexer, t_token *token) {
     }
 
     switch (lexer->current_char) {
+        case EOF:
+            token->type = TOKEN_EOF;
+            token->lexeme = NULL;
+            return 0;
         case '\n':
             lexer_char_advance(lexer);
             lexer->at_line_start = true;
@@ -271,12 +343,20 @@ int lexer_token_advance(t_lexer *lexer, t_token *token) {
 
             lexer_char_advance(lexer);
             return 0;
-
-        case EOF:
-            token->type = TOKEN_EOF;
-            token->lexeme = NULL;
-            return 0;
-
+        case '=':
+        case ':':
+        case '@':
+        case '.':
+        case '(':
+        case ')':
+        case ',':
+        case ';':
+        case '!':
+            return lexer_scan_char(lexer, token, TOKEN_MATCH_SPECIAL_CHAR);
+        case '+':
+        case '-':
+        case '*':
+            return lexer_scan_char(lexer, token, TOKEN_MATCH_OPERATOR);
         default:
             if (isalpha(lexer->current_char) || lexer->current_char == '_') {
                 return lexer_scan_word(lexer, token);
@@ -285,7 +365,6 @@ int lexer_token_advance(t_lexer *lexer, t_token *token) {
             return 1;
     }
 }
-
 
 void token_destroy(t_token *token) {
     free(token->lexeme);
