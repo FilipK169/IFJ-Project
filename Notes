@@ -3,3 +3,210 @@ project parts:
   Skenner (lexer + parser) = Ondřej Vondra (274921)
   Semantics (semantic analysis + symtable + vv-BVS) = Zebrovic (vojtech kabelka)
   CodeGen = FilipK
+
+Návrh AST konstrukce:
+// =================================== //
+// ============ STRUCTURE ============ //
+// =================================== //
+
+AST_PROGRAM
+├── AST_FUNCTION_DEF **functions
+├── size_t function_count
+└── size_t function_capacity
+
+
+AST_FUNCTION_DEF
+├── char *name
+├── size_t function_id                    // doplní semantika
+├── bool is_main
+├── AST_PARAMETER *parameters
+├── size_t parameter_count
+├── size_t parameter_capacity
+├── ENUM_DATA_TYPE declared_return_type   // TYPE_UNSPECIFIED pokud není uveden
+├── ENUM_DATA_TYPE resolved_return_type   // doplní semantika
+└── AST_BLOCK *body
+
+
+AST_PARAMETER
+├── char *name
+├── size_t variable_id                    // doplní semantika
+└── ENUM_DATA_TYPE type                   // u parametru je typ vždy explicitní
+
+
+AST_BLOCK
+├── AST_STATEMENT **statements
+├── size_t statement_count
+└── size_t statement_capacity
+
+// =================================== //
+// ============ STATEMENT ============ //
+// =================================== //
+
+AST_STATEMENT
+├── ENUM_STATEMENT_TYPE type
+├── SOURCE_LOCATION location			   // line + column
+└── union data
+    ├── AST_VAR_DECL
+    ├── AST_ASSIGNMENT
+    ├── AST_RETURN
+    ├── AST_IF
+    ├── AST_WHILE
+    ├── AST_FUNCTION_CALL
+    └── AST_EXPR_STMT
+
+AST_VAR_DECL
+├── char *name
+├── size_t variable_id                    // doplní semantika
+├── bool is_mutable                       // val=false, var=true
+├── ENUM_DATA_TYPE declared_type          // TYPE_UNSPECIFIED pokud není : Type
+├── ENUM_DATA_TYPE resolved_type          // doplní semantika
+└── AST_VALUE *initializer                // povinný
+
+
+AST_ASSIGNMENT
+├── char *name
+├── size_t variable_id                    // doplní semantika
+└── AST_VALUE *value
+
+
+AST_RETURN
+└── AST_VALUE *value                      // NULL = samotné "return"
+
+
+AST_IF
+├── AST_EXPRESSION *condition
+├── AST_BLOCK *then_block
+└── AST_BLOCK *else_block                 // base IFJ26: povinný
+
+
+AST_WHILE
+├── AST_EXPRESSION *condition
+└── AST_BLOCK *body
+
+
+AST_FUNCTION_CALL
+├── char *name
+├── size_t function_id                    // doplní semantika
+├── AST_EXPRESSION **arguments
+├── size_t argument_count
+├── size_t argument_capacity
+├── ENUM_DATA_TYPE resolved_type          // doplní semantika
+└── ENUM_CONVERSION conversion            // doplní semantika
+
+
+AST_EXPR_STMT
+└── AST_EXPRESSION *expression
+
+// =================================== //
+// ============== VALUE ============== //
+// =================================== //
+
+AST_VALUE
+├── ENUM_VALUE_TYPE type
+└── union
+    ├── AST_EXPRESSION *expression
+    └── AST_FUNCTION_CALL *function_call
+
+
+
+
+
+
+// =================================== //
+// =========== EXPRESSION ============ //
+// =================================== //
+
+AST_EXPRESSION
+├── ENUM_EXPRESSION_TYPE type
+├── ENUM_DATA_TYPE resolved_type          // doplní semantika
+├── ENUM_CONVERSION conversion            // doplní semantika
+├── SOURCE_LOCATION location
+└── union data
+    ├── AST_VAR_REF
+    ├── AST_INT_LITERAL
+    ├── AST_DOUBLE_LITERAL
+    ├── AST_STRING_LITERAL
+    ├── AST_UNIT_LITERAL
+    ├── AST_UNARY_EXPRESSION
+    └── AST_BINARY_EXPRESSION
+
+
+
+AST_VAR_REF
+├── char *name
+└── size_t variable_id                    // doplní semantika
+
+
+AST_INT_LITERAL
+└── int64_t value
+
+
+AST_DOUBLE_LITERAL
+└── double value
+
+
+AST_STRING_LITERAL
+├── char *value
+└── size_t length
+
+
+AST_UNIT_LITERAL
+└── NULL                                 // samotný typ uzlu říká vše
+
+
+AST_UNARY_EXPRESSION
+├── ENUM_UNARY_OPERATOR operator
+└── AST_EXPRESSION *operand
+
+
+AST_BINARY_EXPRESSION
+├── ENUM_BINARY_OPERATOR operator
+├── AST_EXPRESSION *left
+└── AST_EXPRESSION *right
+
+
+
+
+
+
+
+
+
+
+PROGRAM
+└── FUNCTION[]
+    ├── PARAMETER[]
+    └── BLOCK
+        └── STATEMENT[]
+            ├── VAR_DECL
+            │   └── VALUE
+            │       ├── EXPRESSION
+            │       └── FUNCTION_CALL
+            │
+            ├── ASSIGNMENT
+            │   └── VALUE
+            │
+            ├── RETURN
+            │   └── VALUE / NULL
+            │
+            ├── IF
+            │   ├── EXPRESSION condition
+            │   ├── BLOCK
+            │   └── BLOCK
+            │
+            ├── WHILE
+            │   ├── EXPRESSION condition
+            │   └── BLOCK
+            │
+            ├── FUNCTION_CALL
+            │   └── EXPRESSION[] arguments
+            │
+            └── EXPR_STMT
+                └── EXPRESSION
+                    ├── VAR_REF
+                    ├── literals
+                    ├── UNARY
+                    └── BINARY
+
+
+
