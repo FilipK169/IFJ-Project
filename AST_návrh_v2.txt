@@ -2,6 +2,12 @@
 // ============ STRUCTURE ============ //
 // =================================== //
 
+
+SOURCE_LOCATION                           // [NEW] pozice ve zdrojovém kódu, vyplňuje parser (z tokenu); předává se hodnotou
+├── size_t line                           // [NEW] 
+└── size_t column                         // [NEW]
+
+
 AST_PROGRAM
 ├── AST_FUNCTION_DEF **functions
 ├── size_t function_count
@@ -12,6 +18,7 @@ AST_FUNCTION_DEF
 ├── char *name                           
 ├── size_t function_id                    // doplní semantika
 ├── bool is_main
+├── SOURCE_LOCATION location              // [NEW]
 ├── AST_PARAM_LIST *param_lists           // [CHANGED]  bylo: AST_PARAMETER *parameters  [EXT:PARAMLISTS]
 ├── size_t param_list_count               // [CHANGED]  bylo: parameter_count            [EXT:PARAMLISTS]   
 ├── size_t param_list_capacity            // [CHANGED]  bylo: parameter_capacity         [EXT:PARAMLISTS]
@@ -30,6 +37,7 @@ AST_PARAM_LIST                            // [NEW][EXT:PARAMLISTS] jeden seznam 
 AST_PARAMETER
 ├── char *name
 ├── size_t variable_id                    // doplní semantika
+├── SOURCE_LOCATION location              // [NEW]
 └── ENUM_DATA_TYPE type                   // u parametru je typ vždy explicitní
 
 
@@ -217,6 +225,7 @@ AST_INTERP_PART                           // [NEW][EXT:INTERPOLATEDS]
 
 PROGRAM
 └── FUNCTION[]
+    ├── 
     ├── PARAM_LIST[]                      // [CHANGED] bylo: PARAMETER[]
     │   └── PARAMETER[]                   // [NEW] (zanořeno pod PARAM_LIST)
     ├── receiver (volitelně)              // [NEW][EXT:EXTKW] PARAMETER
