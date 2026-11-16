@@ -482,10 +482,10 @@ static int generate_return(AST_RETURN *return_stmt, function_counters *counters,
   }
 
   if (counters->is_main) {
-      printf("EXIT int@0");
+      printf("EXIT int@0\n");
     } else {
-      printf("POPFRAME");
-      printf("RETURN");
+      printf("POPFRAME\n");
+      printf("RETURN\n");
   }
 
   return 0;
@@ -1191,9 +1191,9 @@ static int generate_if(AST_IF *if_stmt, function_counters *counters, char var_pr
     return 1;
   }
 
-  printf("PUSHS bool@true");
+  printf("PUSHS bool@true\n");
   if (if_stmt->else_block == NULL) {
-    printf("JUMPIFNEQS %s$if$%i$end", counters->function_name, counters->if_counter);
+    printf("JUMPIFNEQS %s$if$%i$end\n", counters->function_name, counters->if_counter);
     counters->var_mangling_counter++;
     counters->var_mangling = counters->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
@@ -1206,7 +1206,7 @@ static int generate_if(AST_IF *if_stmt, function_counters *counters, char var_pr
       }
     }
   } else {
-    printf("JUMPIFEQS %s$if$%i", counters->function_name, counters->if_counter);
+    printf("JUMPIFEQS %s$if$%i\n", counters->function_name, counters->if_counter);
     counters->var_mangling_counter++;
     counters->var_mangling = counters->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->else_block->statement_count; i++) {
@@ -1218,8 +1218,8 @@ static int generate_if(AST_IF *if_stmt, function_counters *counters, char var_pr
         return 1;
       }
     }
-    printf("JUMP %s$if$%i$end", counters->function_name, counters->if_counter);
-    printf("LABEL %s$if$%i", counters->function_name, counters->if_counter);
+    printf("JUMP %s$if$%i$end\n", counters->function_name, counters->if_counter);
+    printf("LABEL %s$if$%i\n", counters->function_name, counters->if_counter);
     counters->var_mangling_counter++;
     counters->var_mangling = counters->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
@@ -1232,12 +1232,15 @@ static int generate_if(AST_IF *if_stmt, function_counters *counters, char var_pr
       }
     }
   }
-  printf("LABEL %s$if$%i$end", counters->function_name, counters->if_counter);
-
-  counters->var_mangling_counter++;
-  counters->var_mangling = counters->var_mangling_counter;
+  printf("LABEL %s$if$%i$end\n", counters->function_name, counters->if_counter);
 
   counters->var_mangling = prev_mangling;
+
+  while (var_list != NULL && var_list->mangling > prev_mangling) {
+    var_list_node *var_node_delete = var_list;
+    var_list = var_list->next;
+    free(var_node_delete);
+  }
 
   return 0;
 }
@@ -1247,6 +1250,38 @@ static int generate_while(AST_WHILE *while_stmt, function_counters *counters, ch
     return 1;
   }
   
+  size_t prev_mangling = counters->var_mangling;
+  counters->while_counter++;
+
+  printf("LABEL %s$while$%i$loop\n", counters->function_name, counters->while_counter);
+  if (generate_expression(while_stmt->condition, &counters, var_prefix, &var_list) != 0) {
+    return 1;
+  }
+
+  printf("PUSHS bool@true\n");
+  printf("JUMPIFNEQS %s$while$%i$end\n", counters->function_name, counters->while_counter);
+  counters->var_mangling_counter++;
+  counters->var_mangling = counters->var_mangling_counter;
+  for (size_t i = 0; i < while_stmt->body->statement_count; i++) {
+    AST_STATEMENT *statement = while_stmt->body->statements[i];
+    if (statement == NULL) {
+      return 1;
+    }
+    if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
+      return 1;
+    }
+  }
+  printf("JUMP %s$while$%i$loop\n", counters->function_name, counters->while_counter);
+  printf("LABEL %s$while$%i$end\n", counters->function_name, counters->while_counter);
+
+  counters->var_mangling = prev_mangling;
+
+  while (var_list != NULL && var_list->mangling > prev_mangling) {
+    var_list_node *var_node_delete = var_list;
+    var_list = var_list->next;
+    free(var_node_delete);
+  }
+
   return 0;
 }
 
@@ -1255,6 +1290,96 @@ static int generate_for(AST_FOR *for_stmt, function_counters *counters, char var
     return 1;
   }
   
+  size_t prev_mangling = counters->var_mangling;
+  counters->for_counter++;
+  counters->var_mangling_counter++;
+  counters->var_mangling = counters->var_mangling_counter;
+
+  var_list_node *var_node_old = var_list;
+  var_list_node *var_node_new = malloc(sizeof(var_list_node));
+  if (var_node_new == NULL) {
+    return 1;
+  }
+  var_node_new->mangling = counters->var_mangling;
+  var_node_new->name = for_stmt->var_name;
+  var_node_new->next = var_node_old;
+  *var_list = *var_node_new;
+
+  if (generate_expression(for_stmt->from, &counters, var_prefix, &var_list) != 0) {
+    return 1;
+  }
+  printf("POPS %s%s$%i\n", var_prefix, for_stmt->var_name, counters->var_mangling);
+
+  if (generate_expression(for_stmt->to, &counters, var_prefix, &var_list) != 0) {
+    return 1;
+  }
+  printf("POPS $for$to\n");
+
+  if (for_stmt->step != NULL) {
+    if (generate_expression(for_stmt->step, &counters, var_prefix, &var_list) != 0) {
+      return 1;
+    }
+    printf("POPS $for$step\n");
+    printf("PUSHS $for$step\n");
+    printf("PUSHS int@0\n");
+    printf("EQS\n");
+    printf("PUSHS bool@true\n");
+    printf("JUMPIFEQS %s$for$%i$error\n", counters->function_name, counters->for_counter);
+  } else {
+    printf("MOVE $for$step int@1\n");
+  }
+
+  printf("LABEL %s$for$%i$loop\n", counters->function_name, counters->for_counter);
+  if (for_stmt->is_exclusive) {
+    printf("LT $for$check %s%s$%i $for$to\n", var_prefix, for_stmt->var_name, counters->var_mangling);
+    printf("JUMPIFEQ %s$for$%i$end $fo$check bool@false\n", counters->function_name, counters->for_counter);
+  } else {
+    printf("GT $for$check %s%s$%i $for$to\n", var_prefix, for_stmt->var_name, counters->var_mangling);
+    printf("JUMPIFEQ %s$for$%i$end $fo$check bool@true\n", counters->function_name, counters->for_counter);
+  }
+
+  for (size_t i = 0; i < for_stmt->guard_count; i++) {
+    AST_EXPRESSION *guard = for_stmt->guards[i];
+    if (guard == NULL) {
+      return 1;
+    }
+    if (generate_statement(guard, &counters, var_prefix, &var_list) != 0) {
+      return 1;
+    }
+    printf("PUSHS bool@false\n");
+    printf("JUMPIFEQS %s$for$%i$end\n", counters->function_name, counters->for_counter);
+  }
+
+  for (size_t i = 0; i < for_stmt->body->statement_count; i++) {
+    AST_STATEMENT *statement = for_stmt->body->statements[i];
+    if (statement == NULL) {
+      return 1;
+    }
+    if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
+      return 1;
+    }
+  }
+
+  printf("PUSHS %s%s$%i\n", var_prefix, for_stmt->var_name, counters->var_mangling);
+  printf("PUSHS $for$step\n");
+  printf("ADDS\n");
+  printf("POPS %s%s$%i\n", var_prefix, for_stmt->var_name, counters->var_mangling);
+  printf("JUMP %s$for$%i$loop\n", counters->function_name, counters->for_counter);
+
+  if (for_stmt->step != NULL) {
+    printf("LABEL %s$for$%i$error\n", counters->function_name, counters->for_counter);
+    printf("EXIT int@40");
+  }
+  printf("LABEL %s$for$%i$end\n", counters->function_name, counters->for_counter);
+
+  counters->var_mangling = prev_mangling;
+
+  while (var_list != NULL && var_list->mangling > prev_mangling) {
+    var_list_node *var_node_delete = var_list;
+    var_list = var_list->next;
+    free(var_node_delete);
+  }
+
   return 0;
 }
 
