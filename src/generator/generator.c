@@ -30,9 +30,11 @@
 
 /** @brief Checks for ending functions and counters for naming variables and labels*/
 typedef struct {
+  char *function_name;
   bool is_main;
   bool is_last;
   size_t var_mangling;
+  size_t var_mangling_counter;
   size_t if_counter;
   size_t while_counter;
   size_t for_counter;
@@ -171,6 +173,7 @@ static int generate_function(AST_FUNCTION_DEF *function) {
   if (counters == NULL) {
     return 1;
   }
+  counters->var_mangling_counter = 0;
   counters->var_mangling = 0;
   counters->if_counter = 0;
   counters->while_counter = 0;
@@ -182,14 +185,17 @@ static int generate_function(AST_FUNCTION_DEF *function) {
 
   char var_prefix;
   if (function->is_main) {
-    printf("LABEL main\n");
+    printf("LABEL $main\n");
+    sprinf(counters->function_name, "$main");
     var_prefix = "GF@";
     counters->is_main = true;
   } else {
     if (function->receiver == NULL) {
       printf("LABEL %s\n", function->name);
+      sprinf(counters->function_name, "%s", function->name);
     } else {
       printf("LABEL *%s\n", function->name);
+      sprinf(counters->function_name, "*%s", function->name);
     }
     var_prefix = "LF@";
 
@@ -243,8 +249,16 @@ static int generate_function(AST_FUNCTION_DEF *function) {
     if (i == function->body->statement_count - 1) {
       counters->is_last = true;
     }
-    if (generate_statement(statement, &counters, var_prefix, var_list) != 0) {
+    if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
       return 1;
+    }
+    if (counters->is_last && statement->type != STMT_RETURN) {
+      if (counters->is_main) {
+        printf("EXIT int@0");
+      } else {
+        printf("POPFRAME");
+        printf("RETURN");
+      }
     }
   }
 
@@ -459,6 +473,19 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_counters *co
 static int generate_return(AST_RETURN *return_stmt, function_counters *counters, char var_prefix, var_list_node *var_list) {
   if (return_stmt == NULL) {
     return 1;
+  }
+
+  if (return_stmt->value != NULL) {
+    if (generate_expression(return_stmt->value, &counters, var_prefix, &var_list) != 0) {
+      return 1;
+    }
+  }
+
+  if (counters->is_main) {
+      printf("EXIT int@0");
+    } else {
+      printf("POPFRAME");
+      printf("RETURN");
   }
 
   return 0;
@@ -1153,14 +1180,81 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_counte
 }
 
 static int generate_if(AST_IF *if_stmt, function_counters *counters, char var_prefix, var_list_node *var_list) {
+  if (if_stmt == NULL) {
+    return 1;
+  }
+
+  size_t prev_mangling = counters->var_mangling;
+  counters->if_counter++;
+
+  if (generate_expression(if_stmt->condition, &counters, var_prefix, &var_list) != 0) {
+    return 1;
+  }
+
+  printf("PUSHS bool@true");
+  if (if_stmt->else_block == NULL) {
+    printf("JUMPIFNEQS %s$if$%i$end", counters->function_name, counters->if_counter);
+    counters->var_mangling_counter++;
+    counters->var_mangling = counters->var_mangling_counter;
+    for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
+      AST_STATEMENT *statement = if_stmt->then_block->statements[i];
+      if (statement == NULL) {
+        return 1;
+      }
+      if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
+        return 1;
+      }
+    }
+  } else {
+    printf("JUMPIFEQS %s$if$%i", counters->function_name, counters->if_counter);
+    counters->var_mangling_counter++;
+    counters->var_mangling = counters->var_mangling_counter;
+    for (size_t i = 0; i < if_stmt->else_block->statement_count; i++) {
+      AST_STATEMENT *statement = if_stmt->else_block->statements[i];
+      if (statement == NULL) {
+        return 1;
+      }
+      if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
+        return 1;
+      }
+    }
+    printf("JUMP %s$if$%i$end", counters->function_name, counters->if_counter);
+    printf("LABEL %s$if$%i", counters->function_name, counters->if_counter);
+    counters->var_mangling_counter++;
+    counters->var_mangling = counters->var_mangling_counter;
+    for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
+      AST_STATEMENT *statement = if_stmt->then_block->statements[i];
+      if (statement == NULL) {
+        return 1;
+      }
+      if (generate_statement(statement, &counters, var_prefix, &var_list) != 0) {
+        return 1;
+      }
+    }
+  }
+  printf("LABEL %s$if$%i$end", counters->function_name, counters->if_counter);
+
+  counters->var_mangling_counter++;
+  counters->var_mangling = counters->var_mangling_counter;
+
+  counters->var_mangling = prev_mangling;
+
   return 0;
 }
 
 static int generate_while(AST_WHILE *while_stmt, function_counters *counters, char var_prefix, var_list_node *var_list) {
+  if (while_stmt == NULL) {
+    return 1;
+  }
+  
   return 0;
 }
 
 static int generate_for(AST_FOR *for_stmt, function_counters *counters, char var_prefix, var_list_node *var_list) {
+  if (for_stmt == NULL) {
+    return 1;
+  }
+  
   return 0;
 }
 
