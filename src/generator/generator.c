@@ -137,11 +137,12 @@ size_t find_variable(var_list_node *var_list, char name);
 /**
  * @brief Converts a string into IFJcode26 string format.
  *
- * @param[in] string AST node of the string.
- *
+ * @param[in] string String.
+ * @param[in] length Length of the string.
+ * 
  * @return Converted string.
  */
-static char* convert_string(AST_STRING_LITERAL string);
+static char* convert_string(char *string, size_t length);
 
 /**
  * @brief Pomocná funkce používaná pouze uvnitř tohoto modulu.
@@ -330,7 +331,7 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_counters *counters
     printf("MOVE %s%s$%i int@%i\n", var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.int_literal);
 
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
-    char *string = convert_string(var_decl->initializer->data.string_literal);
+    char *string = convert_string(var_decl->initializer->data.string_literal.value, var_decl->initializer->data.string_literal.length);
     printf("MOVE %s%s$%i string@%s\n", var_prefix, var_decl->name, local_mangling, string);
 
   } else if (var_decl->initializer->type == EXPR_UNIT_LITERAL) {
@@ -406,7 +407,7 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_counters *co
     printf("MOVE %s%s$%i int@%i\n", var_prefix, assignment->name, counters->var_mangling, assignment->value->data.int_literal);
 
   } else if (assignment->value->type == EXPR_STRING_LITERAL) {
-    char *string = convert_string(assignment->value->data.string_literal);
+    char *string = convert_string(assignment->value->data.string_literal.value, assignment->value->data.string_literal.length);
     printf("MOVE %s%s$%i string@%s\n", var_prefix, assignment->name, counters->var_mangling, string);
 
   } else if (assignment->value->type == EXPR_UNIT_LITERAL) {
@@ -485,7 +486,7 @@ static int generate_expression(AST_EXPRESSION *expression, function_counters *co
     printf("PUSHS int@%i\n", expression->data.int_literal);
 
   } else if (expression->type == EXPR_STRING_LITERAL) {
-    char *string = convert_string(expression->data.string_literal);
+    char *string = convert_string(expression->data.string_literal.value, expression->data.string_literal.length);
     printf("PUSHS string@%s\n", string);
 
   } else if (expression->type == EXPR_UNIT_LITERAL) {
@@ -605,7 +606,7 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_cou
       if (generate_expression(binary_expr->left, &counters, var_prefix, &var_list) != 0) {
         return 1;
       }
-      printf("POPS %sstr1\n", var_prefix);
+      printf("POPS %s$str1\n", var_prefix);
       if (generate_expression(binary_expr->right, &counters, var_prefix, &var_list) != 0) {
         return 1;
       }
@@ -1073,7 +1074,7 @@ static int generate_member(AST_MEMBER *member, function_counters *counters, char
   if (member->member_kind == MEMBER_EXT_PROPERTY) {
     printf("CALL *%s\n", member->member_name);
   } else if (member->member_kind == MEMBER_TO_STRING) {
-    printf("CALL !toString\n");
+    printf("CALL !toStr\n");
     /*
     if (member->receiver->resolved_type == TYPE_INT) {
       printf("INT2STRS\n");
@@ -1108,6 +1109,46 @@ static int generate_member(AST_MEMBER *member, function_counters *counters, char
 }
 
 static int generate_interpolated(AST_INTERPOLATED *interpolated, function_counters *counters, char var_prefix, var_list_node *var_list) {
+  if (interpolated == NULL) {
+    return 1;
+  }
+
+  bool is_first = true;
+
+  for (size_t i = 0; i < interpolated->part_count; i++) {
+    if (interpolated->parts[i].is_literal == true) {
+      char *string = convert_string(interpolated->parts[i].text, strlen(interpolated->parts[i].text));
+      if (interpolated->part_count > 1) {
+        printf("MOV %s$str%i string@%s\n", var_prefix, is_first ? "1" : "2", string);
+      } else {
+        printf("PUSHS string@%s\n", string);
+        break;
+      }
+    } else {
+      if (generate_expression(interpolated->parts[i].expression, &counters, var_prefix, &var_list) != 0) {
+        return 1;
+      }
+      printf("CALL !toStr\n");
+      if (interpolated->part_count > 1) {
+        printf("POPS %s$str%i\n", var_prefix, is_first ? "1" : "2");
+      } else {
+        break;
+      }
+    }
+    if (is_first) {
+      is_first = false;
+      continue;
+    }
+    printf("CONCAT %s$concatstr %s$str1 %s$str2\n", var_prefix, var_prefix, var_prefix);    
+    if (i < interpolated->part_count - 1) {
+      printf("MOV %s$str1 %s$concatstr\n", var_prefix, var_prefix);
+    }
+  }
+
+  if (interpolated->part_count > 1) {
+    printf("PUSHS %s$concatstr\n", var_prefix);
+  }
+
   return 0;
 }
 
@@ -1142,20 +1183,20 @@ size_t find_variable(var_list_node *var_list, char name) {
   return -1;
 }
 
-static char* convert_string(AST_STRING_LITERAL string) {
+static char* convert_string(char *string, size_t length) {
   char *converted;
-  if (string.length == 0) {
+  if (length == 0) {
     converted = "\\000";
   }
 
-  for (size_t i = 0; i < string.length; i++) {
-    if (string.value[i] <= 32 || string.value[i] == 35 || string.value[i] == 92) {
+  for (size_t i = 0; i < length; i++) {
+    if (string[i] <= 32 || string[i] == 35 || string[i] == 92) {
       char ascii_value[3];
-      sprintf(ascii_value, "%d", string.value[i]);
+      sprintf(ascii_value, "%d", string[i]);
       char escape[4];
       escape[0] = '\\';
       escape[1] = '0';
-      if (string.value[i] < 10) {
+      if (string[i] < 10) {
         escape[2] = '0';
         escape[3] = ascii_value[0];
       }
@@ -1164,7 +1205,7 @@ static char* convert_string(AST_STRING_LITERAL string) {
       strcat(converted, escape);
 
     } else {
-      strcat(converted, string.value[i]);
+      strcat(converted, string[i]);
     }
   }
   return converted;
