@@ -17,12 +17,11 @@
 // ========================================== //
 // =============== INCLUDES ================= //
 // ========================================== //
-
-// TODO: include header containing t_data_type probably AST
+#include "ast.h"
 
 #include <stdbool.h>
-#include <stdint.h> // kvůli SIZE_MAX
 #include <stddef.h>
+#include <stdint.h> // kvůli SIZE_MAX
 
 // ========================================== //
 // ======== CONSTANTS AND TYPEDEFS ========== //
@@ -33,6 +32,8 @@ typedef size_t t_symbol_id;
 #define SYMBOL_ID_INVALID SIZE_MAX
 
 typedef struct t_symtable t_symtable;
+
+typedef struct t_scope t_scope;
 
 // ========================================== //
 // ================ ENUMS =================== //
@@ -60,14 +61,14 @@ typedef enum {
 typedef struct {
   char *name;
 
-  t_data_type type;
+  ENUM_DATA_TYPE type;
 
   bool is_mutable;
   bool is_parameter;
 } t_variable_symbol;
 
 typedef struct {
-  t_data_type *types;
+  ENUM_DATA_TYPE *types;
   size_t count;
 } t_function_parameter_list;
 
@@ -76,12 +77,12 @@ typedef struct {
 
   t_function_kind kind;
 
-  t_data_type return_type;
+  ENUM_DATA_TYPE return_type;
 
   t_function_parameter_list *parameter_lists;
   size_t parameter_list_count;
 
-  t_data_type receiver_type;
+  ENUM_DATA_TYPE receiver_type;
 
   bool is_main;
 } t_function_symbol;
@@ -98,6 +99,10 @@ typedef struct {
   size_t capacity;
 } t_function_pool;
 
+typedef struct {
+  t_variable_pool variables;
+  t_function_pool functions;
+} t_symbol_pools;
 // ========================================== //
 // ===== DECLARATION OF PUBLIC FUNCTIONS ==== //
 // ========================================== //
@@ -119,7 +124,7 @@ t_symtable *symtable_create(void);
  *
  * All active variable scopes and the function lookup tree are destroyed.
  * Symbol pools are also destroyed unless their ownership was previously
- * transferred using the corresponding take functions.
+ * transferred using symtable_take_pools().
  *
  * @param table Pointer to the symbol table; may be NULL.
  */
@@ -153,6 +158,42 @@ t_symtable_result symtable_enter_scope(t_symtable *table);
  */
 t_symtable_result symtable_leave_scope(t_symtable *table);
 
+/**
+ * Temporarily detaches the current variable scope chain from the symbol table.
+ *
+ * The detached scope chain is not destroyed. The symbol table is left with
+ * no active variable scope, so the next call to symtable_enter_scope() creates
+ * a new root scope.
+ *
+ * This is intended for temporarily suspending analysis of one function while
+ * another function is analyzed independently.
+ *
+ * The returned scope must later be restored using symtable_restore_scope().
+ *
+ * @param table Pointer to the symbol table.
+ *
+ * @return Pointer to the previously active scope chain,
+ *         or NULL if the table is NULL or no scope was active.
+ */
+t_scope *symtable_detach_scope(t_symtable *table);
+
+/**
+ * Restores a previously detached variable scope chain.
+ *
+ * The symbol table must currently have no active variable scope.
+ * The supplied scope becomes the current scope again, preserving its original
+ * parent chain.
+ *
+ * @param table Pointer to the symbol table.
+ * @param scope Scope chain previously returned by symtable_detach_scope();
+ *              may be NULL to restore an empty scope state.
+ *
+ * @return SYMTABLE_OK on success,
+ *         SYMTABLE_ERR_INVALID_ARGUMENT if the table is NULL
+ *         or if another scope is currently active.
+ */
+t_symtable_result symtable_restore_scope(t_symtable *table, t_scope *scope);
+
 // ----- Variables -----
 
 /**
@@ -169,35 +210,13 @@ t_symtable_result symtable_leave_scope(t_symtable *table);
  * @param out_id Output pointer receiving the assigned variable ID.
  *
  * @return SYMTABLE_OK on success,
- *         SYMTABLE_ERR_DUPLICATE if the name already exists in the current scope,
- *         SYMTABLE_ERR_NO_SCOPE if no current scope exists,
- *         SYMTABLE_ERR_ALLOC on allocation failure,
- *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
+ *         SYMTABLE_ERR_DUPLICATE if the name already exists in the current
+ * scope, SYMTABLE_ERR_NO_SCOPE if no current scope exists, SYMTABLE_ERR_ALLOC
+ * on allocation failure, SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_insert_variable(
-    t_symtable *table,
-    const t_variable_symbol *symbol,
-    t_symbol_id *out_id);
-
-/**
- * Finds a variable in the current scope.
- *
- * Only the current scope is searched. Parent scopes are not considered.
- *
- * @param table Pointer to the symbol table.
- * @param name Name of the variable to find.
- * @param out_id Output pointer receiving the variable ID.
- *
- * @return SYMTABLE_OK if the variable was found,
- *         SYMTABLE_ERR_NOT_FOUND if the variable does not exist
- *         in the current scope,
- *         SYMTABLE_ERR_NO_SCOPE if no current scope exists,
- *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
- */
-t_symtable_result symtable_find_variable_current(
-    const t_symtable *table,
-    const char *name,
-    t_symbol_id *out_id);
+t_symtable_result symtable_insert_variable(t_symtable *table,
+                                           const t_variable_symbol *symbol,
+                                           t_symbol_id *out_id);
 
 /**
  * Finds a variable in the current scope or any of its parent scopes.
@@ -215,10 +234,8 @@ t_symtable_result symtable_find_variable_current(
  *         SYMTABLE_ERR_NO_SCOPE if no current scope exists,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_find_variable(
-    const t_symtable *table,
-    const char *name,
-    t_symbol_id *out_id);
+t_symtable_result symtable_find_variable(const t_symtable *table,
+                                         const char *name, t_symbol_id *out_id);
 
 /**
  * Returns a variable symbol stored in the variable pool.
@@ -232,9 +249,8 @@ t_symtable_result symtable_find_variable(
  * @return Pointer to the variable symbol if the ID is valid,
  *         or NULL if the table is NULL or the ID does not exist.
  */
-t_variable_symbol *symtable_get_variable(
-    t_symtable *table,
-    t_symbol_id id);
+t_variable_symbol *symtable_get_variable_by_id(t_symtable *table,
+                                               t_symbol_id id);
 
 // ----- Functions -----
 
@@ -253,10 +269,9 @@ t_variable_symbol *symtable_get_variable(
  *         SYMTABLE_ERR_ALLOC on allocation failure,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_insert_function(
-    t_symtable *table,
-    const t_function_symbol *symbol,
-    t_symbol_id *out_id);
+t_symtable_result symtable_insert_function(t_symtable *table,
+                                           const t_function_symbol *symbol,
+                                           t_symbol_id *out_id);
 
 /**
  * Finds a function matching the given name and receiver information.
@@ -274,12 +289,10 @@ t_symtable_result symtable_insert_function(
  *         SYMTABLE_ERR_NOT_FOUND if no matching function exists,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_find_function(
-    const t_symtable *table,
-    const char *name,
-    bool has_receiver,
-    t_data_type receiver_type,
-    t_symbol_id *out_id);
+t_symtable_result symtable_find_function(const t_symtable *table,
+                                         const char *name, bool has_receiver,
+                                         ENUM_DATA_TYPE receiver_type,
+                                         t_symbol_id *out_id);
 
 /**
  * Returns a function symbol stored in the function pool.
@@ -293,46 +306,27 @@ t_symtable_result symtable_find_function(
  * @return Pointer to the function symbol if the ID is valid,
  *         or NULL if the table is NULL or the ID does not exist.
  */
-t_function_symbol *symtable_get_function(
-    t_symtable *table,
-    t_symbol_id id);
+t_function_symbol *symtable_get_function_by_id(t_symtable *table,
+                                               t_symbol_id id);
 
 // ----- Pool ownership transfer -----
 
 /**
- * Transfers ownership of the variable pool from the symbol table to the caller.
+ * Transfers ownership of all symbol pools from the symbol table to the caller.
  *
- * After this call, the symbol table no longer owns the returned pool and will
- * not destroy it.
- *
- * @param table Pointer to the symbol table.
- * @return Variable pool previously owned by the symbol table.
- */
-t_variable_pool symtable_take_variable_pool(t_symtable *table);
-
-/**
- * Transfers ownership of the function pool from the symbol table to the caller.
- *
- * After this call, the symbol table no longer owns the returned pool and will
- * not destroy it.
+ * After this call, the symbol table no longer owns the returned pools and will
+ * not destroy them.
  *
  * @param table Pointer to the symbol table.
- * @return Function pool previously owned by the symbol table.
+ * @return Symbol pools previously owned by the symbol table.
  */
-t_function_pool symtable_take_function_pool(t_symtable *table);
+t_symbol_pools symtable_take_pools(t_symtable *table);
 
 /**
- * Destroys a variable pool and all data owned by its symbols.
+ * Destroys all symbol pools and data owned by their symbols.
  *
- * @param pool Pointer to the variable pool; may be NULL.
+ * @param pools Pointer to the symbol pools; may be NULL.
  */
-void symtable_variable_pool_destroy(t_variable_pool *pool);
-
-/**
- * Destroys a function pool and all data owned by its symbols.
- *
- * @param pool Pointer to the function pool; may be NULL.
- */
-void symtable_function_pool_destroy(t_function_pool *pool);
+void symtable_pools_destroy(t_symbol_pools *pools);
 
 #endif // SYMTABLE_H
