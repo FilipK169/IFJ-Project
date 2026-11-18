@@ -147,4 +147,18 @@ t_parse_rc parse_expression(t_parser *p, AST_EXPRESSION **out);
 /** @brief Right-hand side: a call `ID (...)` or a plain expression. */
 t_parse_rc parse_rhs(t_parser *p, AST_EXPRESSION **out);
 
+// ---------- parser_stmt.c: statements and blocks ---------- //
+
+/** @brief Wraps one statement into a new block. Consumes `stmt` in every case. */
+t_parse_rc parser_block_from_statement(AST_STATEMENT *stmt, AST_BLOCK **out);
+
+/** @brief One-line function body: `def f() = rhs`, wrapped in a one-statement block. */
+t_parse_rc parser_inline_expr_block(t_parser *p, AST_BLOCK **out);
+
+/** @brief `EOL INDENT statement { separator statement } DEDENT`. */
+t_parse_rc parse_indented_block(t_parser *p, AST_BLOCK **out);
+
+/** @brief One statement (without its terminator). */
+t_parse_rc parse_statement(t_parser *p, AST_STATEMENT **out);
+
 #endif // PARSER_INTERNAL_H
