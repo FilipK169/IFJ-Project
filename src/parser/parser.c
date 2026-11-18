@@ -2,8 +2,7 @@
  * @file parser.c
  * @brief Recursive descent parser of IFJ26 (tokens -> AST).
  *
- * Step 1: only the skeleton. It reads all tokens up to the end of the file,
- * so lexical errors are reported, but it builds an empty program.
+ * Reads all tokens up to the end of the file, so lexical errors are reported, but it builds an empty program.
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -19,6 +18,10 @@
 // ========================================== //
 
 #include "parser_internal.h"
+
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
 
 // ========================================== //
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
@@ -36,9 +39,123 @@ static t_parse_rc lex_rc(t_lex_rc rc) {
     }
 }
 
+// ---------- helpers shared with parser_stmt.c / parser_expr.c ---------- //
+
+// strdup is POSIX, not C11
+char *parser_strdup(const char *s) {
+    size_t n = strlen(s) + 1;
+    char *copy = malloc(n);
+    if (copy != NULL) {
+        memcpy(copy, s, n);
+    }
+    return copy;
+}
+
+/*
+ * AI use
+ * @note same as in lexer
+ */
+
+#ifdef __GNUC__
+__attribute__((format(printf, 2, 3)))
+#endif
+t_parse_rc parser_syntax_error(t_parser *p, const char *fmt, ...) {
+    fprintf(stderr, "Syntax error at %d:%d: ", p->cur.line, p->cur.column);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    fputc('\n', stderr);
+    return PARSE_ERR_SYNTAX;
+}
+
+/*
+ * END AI
+ */
+
+// ---------- token access ---------- //
+
+/** Moves to the next token. The previous token and its string are released. */
 t_parse_rc parser_advance(t_parser *p) {
-    // lexer_next frees the previous content of p->cur by itself
+    p->after_block = false;
+    if (p->has_next) {
+        token_free(&p->cur);
+        p->cur = p->next; // ownership of the string moves with the struct
+        token_init(&p->next);
+        p->has_next = false;
+        return PARSE_OK;
+    }
     return lex_rc(lexer_next(&p->lexer, &p->cur));
+}
+
+/**
+ * Returns the type of the token AFTER the current one without consuming anything.
+ *
+ * Do not call lexer_mode() while a token is buffered here, the lexer is already
+ * one token ahead (parse_interpolated checks this).
+ */
+t_parse_rc parser_peek_type(t_parser *p, t_token_type *out) {
+    if (!p->has_next) {
+        TRY(lex_rc(lexer_next(&p->lexer, &p->next)));
+        p->has_next = true;
+    }
+    *out = p->next.type;
+    return PARSE_OK;
+}
+
+/** Current token must be `type`, otherwise syntax error. Consumes it. */
+t_parse_rc parser_expect(t_parser *p, t_token_type type, const char *what) {
+    if (p->cur.type != type) {
+        return parser_syntax_error(p, "expected %s, got %s", what, token_type_name(p->cur.type));
+    }
+    return parser_advance(p);
+}
+
+/** Enters one more nesting level (call parser_leave() when done). */
+t_parse_rc parser_enter(t_parser *p) {
+    if (++p->depth > PARSER_MAX_DEPTH) {
+        return parser_syntax_error(p, "nesting is too deep");
+    }
+    return PARSE_OK;
+}
+
+void parser_leave(t_parser *p) {
+    p->depth--;
+}
+
+// ---------- functions and program ---------- //
+
+/** import ifj26.*  EOL */
+static t_parse_rc parse_prolog(t_parser *p) {
+    TRY(parser_expect(p, TOKEN_KW_IMPORT, "the prolog 'import ifj26.*'"));
+    if (p->cur.type != TOKEN_ID || strcmp(p->cur.value.str_val, "ifj26") != 0) {
+        return parser_syntax_error(p, "the prolog must be exactly 'import ifj26.*'");
+    }
+    TRY(parser_advance(p));
+    TRY(parser_expect(p, TOKEN_DOT, "'.' in the prolog"));
+    TRY(parser_expect(p, TOKEN_MULTIPLY, "'*' in the prolog"));
+
+    if (p->cur.type == TOKEN_EOL) {
+        return parser_advance(p);
+    }
+    if (p->cur.type != TOKEN_EOF) {
+        return parser_syntax_error(p, "unexpected %s after the prolog", token_type_name(p->cur.type));
+    }
+    return PARSE_OK;
+}
+
+static t_parse_rc parse_program(t_parser *p, AST_PROGRAM *program) {
+    (void)program; // temp
+
+    TRY(parse_prolog(p));
+
+    //temp
+    while (p->cur.type != TOKEN_EOF) {
+        TRY(parser_advance(p));
+    }
+    return PARSE_OK;
 }
 
 // ========================================== //
@@ -57,6 +174,10 @@ t_parse_rc parser_parse(FILE *in, AST_PROGRAM **out_program) {
         return rc;
     }
     token_init(&p.cur); // lexer_next frees the old token first, so it must start zeroed
+    token_init(&p.next);
+    p.has_next = false;
+    p.after_block = false;
+    p.depth = 0;
 
     AST_PROGRAM *program = ast_program_create();
     if (program == NULL) {
@@ -65,12 +186,13 @@ t_parse_rc parser_parse(FILE *in, AST_PROGRAM **out_program) {
     }
 
     // Step 1 only: walk through all tokens until EOF
-    rc = parser_advance(&p);
-    while (rc == PARSE_OK && p.cur.type != TOKEN_EOF) {
-        rc = parser_advance(&p);
+    rc = parser_advance(&p); // load the first token
+    if (rc == PARSE_OK) {
+        rc = parse_program(&p, program);
     }
 
     token_free(&p.cur);
+    token_free(&p.next);
     lexer_destroy(&p.lexer);
 
     if (rc != PARSE_OK) {
