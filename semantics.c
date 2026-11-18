@@ -1821,9 +1821,8 @@ static ENUM_DATA_TYPE get_statement_result_type(AST_STATEMENT *statement) {
 // ============ PUBLIC FUNCTIONS ============ //
 // ========================================== //
 
-t_semantics_result semantics_analyze(AST_PROGRAM *program,
-                                     t_symbol_pools *out_pools) {
-  if (!program || !out_pools)
+t_semantics_result semantics_analyze(AST_PROGRAM *program) {
+  if (!program)
     return SEMANTICS_ERR_INTERNAL;
 
   *out_pools = (t_symbol_pools){0};
@@ -1854,7 +1853,7 @@ t_semantics_result semantics_analyze(AST_PROGRAM *program,
   }
 
   // Transfer symbol pools to caller
-  *out_pools = symtable_take_pools(table);
+  // *out_pools = symtable_take_pools(table);
   symtable_destroy(table);
 
   return SEMANTICS_OK;
