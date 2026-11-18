@@ -31,17 +31,17 @@
 
 /** @brief Structure for function name, files, checks and counters.*/
 typedef struct {
-  char *function_name;
-  FILE *function_head;
-  FILE *function_body;
-  bool is_main;
-  bool is_last;
-  size_t var_mangling;
-  size_t var_mangling_counter;
-  size_t if_counter;
-  size_t while_counter;
-  size_t for_counter;
-  bool was_concat;
+  char *function_name; // Name of current function.
+  FILE *function_head; // Generated head of current function, used for variable declarations.
+  FILE *function_body; // Generated body of current function.
+  char *var_prefix; // Variable prefix for current function.
+  bool is_main; // Is function the main function?
+  size_t var_mangling; // Mangling of variables in the current scope.
+  size_t var_mangling_counter; // Mangling counter for whole function.
+  size_t if_counter; // Counter of if statements in a function.
+  size_t while_counter; // Counter of while cycles in a function.
+  size_t for_counter; // Counter of for cycles in a function.
+  bool was_concat; // Check for generating helper variables for concatenation.
 } function_globals;
 
 /** @brief Checklist of used built-in functions.*/
@@ -72,99 +72,229 @@ typedef struct {
  * @brief Generates code for function definitions.
  *
  * @param[in] function AST node of the function definition.
+ * @param[in,out] builtins Checklist of used built-in functions.
  *
- * @return Error check.
- * @retval 0 - success.
- * @retval 1 - error.
+ * @return 0 on success, 1 on error.
  */
 static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *builtins);
 
 /**
  * @brief Generates code for statements.
  *
- * @param[in] statement AST node of the function definition.
+ * @param[in] statement AST node of the statement.
  * @param[in,out] func_globals Structure for function name, files, checks and counters.
- * @param[in] var_prefix Frame prefix for variables.
- * @param[in,out] var_list List of declared local variables.
- *
- * @return Error check.
- * @retval 0 - success.
- * @retval 1 - error.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
  */
-static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
 /**
  * @brief Generates code for variable declarations.
  *
- * @param[in] statement AST node of the variable declaration.
+ * @param[in] var_decl AST node of the variable declaration.
  * @param[in,out] func_globals Structure for function name, files, checks and counters.
- * @param[in] var_prefix Frame prefix for variables.
- * @param[in,out] var_list List of declared local variables.
- *
- * @return Error check.
- * @retval 0 - success.
- * @retval 1 - error.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
  */
-static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for variable assignments.
+ *
+ * @param[in] assignment AST node of the variable assignment.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+/**
+ * @brief Generates code for returns and exit.
+ *
+ * @param[in] return_stmt AST node of the return.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_return(AST_RETURN *return_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for expressions.
+ *
+ * @param[in] expression AST node of the expression.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_expression(AST_EXPRESSION *expression, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_return(AST_RETURN *return_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+/**
+ * @brief Generates code for unary expressions.
+ *
+ * @param[in] unary_expr AST node of the unary expression.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_unary_expr(AST_UNARY_EXPRESSION *unary_expr, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for binary expressions.
+ *
+ * @param[in] binary_expr AST node of the binary expression.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_expression(AST_EXPRESSION *expression, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+/**
+ * @brief Generates code for function calls.
+ *
+ * @param[in] call AST node of the function call.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_call(AST_CALL *call, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for member function calls.
+ *
+ * @param[in] member AST node of the member function call.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_member(AST_MEMBER *member, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_unary_expr(AST_UNARY_EXPRESSION *unary_expr, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+/**
+ * @brief Generates code for interpolated strings.
+ *
+ * @param[in] interpolated AST node of the interpolated strings.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_interpolated(AST_INTERPOLATED *interpolated, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for if statements.
+ *
+ * @param[in] if_stmt AST node of the if statement.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
+/**
+ * @brief Generates code for while cycles.
+ *
+ * @param[in] while_stmt AST node of the while cycle.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
+/**
+ * @brief Generates code for for cycles.
+ *
+ * @param[in] for_stmt AST node of the for cycle.
+ * @param[in,out] func_globals Structure for function name, files, checks and counters.
+ * @param[in,out] var_list List of currently declared variables.
+ * @param[in,out] builtins Checklist of used built-in functions.
+ * 
+ * @return 0 on success, 1 on error.
+ */
+static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins);
 
-static int generate_call(AST_CALL *call, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
-static int generate_member(AST_MEMBER *member, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
-static int generate_interpolated(AST_INTERPOLATED *interpolated, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
-static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
-static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins);
-
-
+/**
+ * @brief Generates code for built-in print function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_print();
 
-
+/**
+ * @brief Generates code for built-in readLine function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_readLine();
 
-
+/**
+ * @brief Generates code for built-in readInt function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_readInt();
 
-
+/**
+ * @brief Generates code for built-in readDouble function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_readDouble();
 
-
+/**
+ * @brief Generates code for built-in readBoolean function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_readBoolean();
 
-
+/**
+ * @brief Generates code for built-in toStr function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_toStr();
 
-
+/**
+ * @brief Generates code for built-in strLength function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_strLength();
 
-
+/**
+ * @brief Generates code for built-in subStr function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_subStr();
 
-
+/**
+ * @brief Generates code for built-in ord function.
+ *
+ * @return 0 on success, 1 on error.
+ */
 static int builtin_ord();
 
 //======================================
@@ -209,18 +339,17 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
   func_globals->while_counter = 0;
   func_globals->for_counter = 0;
   func_globals->is_main = false;
-  func_globals->is_last = false;
   func_globals->was_concat = false;
   func_globals->function_head = tmpfile();
   func_globals->function_body = tmpfile();
 
+  bool is_last = false;
   var_list_node *var_list = NULL;
 
-  char var_prefix;
   if (function->is_main) {
     fprintf(func_globals->function_head, "LABEL $main\n");
     sprinf(func_globals->function_name, "$main");
-    var_prefix = "GF@";
+    func_globals->var_prefix = "GF@";
     func_globals->is_main = true;
   } else {
     if (function->receiver == NULL) {
@@ -230,16 +359,24 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       fprintf(func_globals->function_head, "LABEL *%s\n", function->name);
       sprinf(func_globals->function_name, "*%s", function->name);
     }
-    var_prefix = "LF@";
+    func_globals->var_prefix = "LF@";
 
     fprintf(func_globals->function_head, "CREATEFRAME\n");
     fprintf(func_globals->function_head, "PUSHFRAME\n");
 
     if (function->receiver != NULL) {
-      fprintf(func_globals->function_head, "DEFVAR %s%s\n", var_prefix, function->receiver->name);
+      fprintf(func_globals->function_head, "DEFVAR %s%s\n", func_globals->var_prefix, function->receiver->name);
       var_list_node *var_node_old = var_list;
       var_list_node *var_list = malloc(sizeof(var_list_node));
       if (var_list == NULL) {
+        while (var_list != NULL) {
+          var_list_node *var_node_delete = var_list;
+          var_list = var_list->next;
+          free(var_node_delete);
+        }
+        fclose(func_globals->function_head);
+        fclose(func_globals->function_body);
+        free(func_globals);
         return 1;
       }
       var_list->mangling = 0;
@@ -251,10 +388,18 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       AST_PARAM_LIST *param_list = &function->param_lists[i];
       for (size_t j = 0; j < param_list->parameter_count; j++) {
         AST_PARAMETER *param = &param_list->parameters[j];
-        fprintf(func_globals->function_head, "DEFVAR %s%s$%i\n", var_prefix, param->name, func_globals->var_mangling);
+        fprintf(func_globals->function_head, "DEFVAR %s%s$%i\n", func_globals->var_prefix, param->name, func_globals->var_mangling);
         var_list_node *var_node_old = var_list;
         var_list_node *var_list = malloc(sizeof(var_list_node));
         if (var_list == NULL) {
+          while (var_list != NULL) {
+            var_list_node *var_node_delete = var_list;
+            var_list = var_list->next;
+            free(var_node_delete);
+          }
+          fclose(func_globals->function_head);
+          fclose(func_globals->function_body);
+          free(func_globals);
           return 1;
         }
         var_list->mangling = 0;
@@ -267,27 +412,43 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       AST_PARAM_LIST *param_list = &function->param_lists[i - 1];
       for (size_t j = param_list->parameter_count; j > 0; j--) {
         AST_PARAMETER *param = &param_list->parameters[j - 1];
-        fprintf(func_globals->function_head, "POPS %s%s$%i\n", var_prefix, param->name, func_globals->var_mangling);
+        fprintf(func_globals->function_head, "POPS %s%s$%i\n", func_globals->var_prefix, param->name, func_globals->var_mangling);
       }
     }
 
     if (function->receiver != NULL) {
-      fprintf(func_globals->function_head, "POPS %s%s\n", var_prefix, function->receiver->name);
+      fprintf(func_globals->function_head, "POPS %s%s\n", func_globals->var_prefix, function->receiver->name);
     }
   }
 
   for (size_t i = 0; i < function->body->statement_count; i++) {
     AST_STATEMENT *statement = function->body->statements[i];
     if (statement == NULL) {
+      while (var_list != NULL) {
+        var_list_node *var_node_delete = var_list;
+        var_list = var_list->next;
+        free(var_node_delete);
+      }
+      fclose(func_globals->function_head);
+      fclose(func_globals->function_body);
+      free(func_globals);
       return 1;
     }
     if (i == function->body->statement_count - 1) {
-      func_globals->is_last = true;
+      is_last = true;
     }
-    if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
+      while (var_list != NULL) {
+        var_list_node *var_node_delete = var_list;
+        var_list = var_list->next;
+        free(var_node_delete);
+      }
+      fclose(func_globals->function_head);
+      fclose(func_globals->function_body);
+      free(func_globals);
       return 1;
     }
-    if (func_globals->is_last && statement->type != STMT_RETURN) {
+    if (is_last && statement->type != STMT_RETURN) {
       if (func_globals->is_main) {
         fprintf(func_globals->function_body, "EXIT int@0\n");
       } else {
@@ -318,37 +479,37 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
   return 0;
 }
 
-static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (statement == NULL) {
     return 1;
   }
 
   if (statement->type == STMT_VAR_DECL) {
-    if (generate_var_decl(&statement->data.var_decl, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_var_decl(&statement->data.var_decl, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_ASSIGNMENT) {
-    if (generate_assignment(&statement->data.assignment, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_assignment(&statement->data.assignment, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_RETURN) {
-    if (generate_return(&statement->data.return_stmt, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_return(&statement->data.return_stmt, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_IF) {
-    if (generate_if(&statement->data.if_stmt, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_if(&statement->data.if_stmt, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_WHILE) {
-    if (generate_while(&statement->data.while_stmt, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_while(&statement->data.while_stmt, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_FOR) {
-    if (generate_for(&statement->data.for_stmt, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_for(&statement->data.for_stmt, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_EXPR) {
-    if (generate_expression(statement->data.expr_stmt.expression, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_expression(statement->data.expr_stmt.expression, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   } else {
@@ -358,7 +519,7 @@ static int generate_statement(AST_STATEMENT *statement, function_globals *func_g
   return 0;
 }
 
-static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (var_decl == NULL) {
     return 1;
   }
@@ -380,71 +541,71 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
     if (mangling < 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "MOVE %s%s$%i %s%s$%i\n", var_prefix, var_decl->name, local_mangling, var_prefix, var_decl->initializer->data.var_ref.name, mangling);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling, func_globals->var_prefix, var_decl->initializer->data.var_ref.name, mangling);
 
   } else if (var_decl->initializer->type == EXPR_BOOL_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i bool@%s\n", var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.bool_literal ? "true" : "false");
+    fprintf(func_globals->function_body, "MOVE %s%s$%i bool@%s\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.bool_literal ? "true" : "false");
 
   } else if (var_decl->initializer->type == EXPR_DOUBLE_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i float@%a\n", var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.double_literal);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i float@%a\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.double_literal);
 
   } else if (var_decl->initializer->type == EXPR_INT_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i int@%i\n", var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.int_literal);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i int@%i\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.int_literal);
 
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(var_decl->initializer->data.string_literal.value, var_decl->initializer->data.string_literal.length);
-    fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", var_prefix, var_decl->name, local_mangling, string);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", func_globals->var_prefix, var_decl->name, local_mangling, string);
     free(string);
 
   } else if (var_decl->initializer->type == EXPR_UNIT_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_UNARY) {
-    if (generate_unary_expr(&var_decl->initializer->data.unary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_unary_expr(&var_decl->initializer->data.unary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_BINARY) {
-    if (generate_binary_expr(&var_decl->initializer->data.binary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_binary_expr(&var_decl->initializer->data.binary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_CALL) {
-    if (generate_call(&var_decl->initializer->data.call, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_call(&var_decl->initializer->data.call, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_MEMBER) {
-    if (generate_member(&var_decl->initializer->data.member, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_member(&var_decl->initializer->data.member, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_INTERPOLATED) {
-    if (generate_interpolated(&var_decl->initializer->data.interpolated, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_interpolated(&var_decl->initializer->data.interpolated, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else if (var_decl->initializer->type == EXPR_IF) {
-    if (generate_if(&var_decl->initializer->data.if_expr, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_if(&var_decl->initializer->data.if_expr, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   } else {
     return 1;
   }
 
-  fprintf(func_globals->function_head, "DEFVAR %s%s$%i\n", var_prefix, var_decl->name, local_mangling);
+  fprintf(func_globals->function_head, "DEFVAR %s%s$%i\n", func_globals->var_prefix, var_decl->name, local_mangling);
 
   return 0;
 }
 
-static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (assignment == NULL) {
     return 1;
   }
@@ -459,60 +620,60 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
     if (mangling < 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "MOVE %s%s$%i %s%s$%i\n", var_prefix, assignment->name, local_mangling, var_prefix, assignment->value->data.var_ref.name, mangling);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling, func_globals->var_prefix, assignment->value->data.var_ref.name, mangling);
 
   } else if (assignment->value->type == EXPR_BOOL_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i bool@%s\n", var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.bool_literal ? "true" : "false");
+    fprintf(func_globals->function_body, "MOVE %s%s$%i bool@%s\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.bool_literal ? "true" : "false");
 
   } else if (assignment->value->type == EXPR_DOUBLE_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i float@%a\n", var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.double_literal);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i float@%a\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.double_literal);
 
   } else if (assignment->value->type == EXPR_INT_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i int@%i\n", var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.int_literal);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i int@%i\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.int_literal);
 
   } else if (assignment->value->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(assignment->value->data.string_literal.value, assignment->value->data.string_literal.length);
-    fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", var_prefix, assignment->name, func_globals->var_mangling, string);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, string);
     free(string);
 
   } else if (assignment->value->type == EXPR_UNIT_LITERAL) {
-    fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", var_prefix, assignment->name, func_globals->var_mangling);
+    fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling);
 
   } else if (assignment->value->type == EXPR_UNARY) {
-    if (generate_unary_expr(&assignment->value->data.unary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_unary_expr(&assignment->value->data.unary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_BINARY) {
-    if (generate_binary_expr(&assignment->value->data.binary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_binary_expr(&assignment->value->data.binary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_CALL) {
-    if (generate_call(&assignment->value->data.call, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_call(&assignment->value->data.call, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_MEMBER) {
-    if (generate_member(&assignment->value->data.member, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_member(&assignment->value->data.member, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_INTERPOLATED) {
-    if (generate_interpolated(&assignment->value->data.interpolated, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_interpolated(&assignment->value->data.interpolated, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_IF) {
-    if (generate_if(&assignment->value->data.if_expr, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_if(&assignment->value->data.if_expr, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, assignment->name, local_mangling);
+    fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else {
     return 1;
@@ -521,13 +682,13 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
   return 0;
 }
 
-static int generate_return(AST_RETURN *return_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_return(AST_RETURN *return_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (return_stmt == NULL) {
     return 1;
   }
 
   if (return_stmt->value != NULL) {
-    if (generate_expression(return_stmt->value, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_expression(return_stmt->value, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   }
@@ -542,7 +703,7 @@ static int generate_return(AST_RETURN *return_stmt, function_globals *func_globa
   return 0;
 }
 
-static int generate_expression(AST_EXPRESSION *expression, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_expression(AST_EXPRESSION *expression, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (expression == NULL) {
     return 1;
   }
@@ -552,7 +713,7 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
     if (mangling < 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "PUSHS %s%s$%i\n", var_prefix, expression->data.var_ref.name, mangling);
+    fprintf(func_globals->function_body, "PUSHS %s%s$%i\n", func_globals->var_prefix, expression->data.var_ref.name, mangling);
 
   } else if (expression->type == EXPR_BOOL_LITERAL) {
     fprintf(func_globals->function_body, "PUSHS bool@%s\n", expression->data.bool_literal ? "true" : "false");
@@ -572,32 +733,32 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
     fprintf(func_globals->function_body, "PUSHS nil@nil\n");
 
   } else if (expression->type == EXPR_UNARY) {
-    if (generate_unary_expr(&expression->data.unary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_unary_expr(&expression->data.unary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
   } else if (expression->type == EXPR_BINARY) {
-    if (generate_binary_expr(&expression->data.binary, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_binary_expr(&expression->data.binary, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
   } else if (expression->type == EXPR_CALL) {
-    if (generate_call(&expression->data.call, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_call(&expression->data.call, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
   } else if (expression->type == EXPR_MEMBER) {
-    if (generate_member(&expression->data.member, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_member(&expression->data.member, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
   } else if (expression->type == EXPR_INTERPOLATED) {
-    if (generate_interpolated(&expression->data.interpolated, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_interpolated(&expression->data.interpolated, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
   } else if (expression->type == EXPR_IF) {
-    if (generate_if(&expression->data.if_expr, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_if(&expression->data.if_expr, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
 
@@ -608,12 +769,12 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
   return 0;
 }
 
-static int generate_unary_expr(AST_UNARY_EXPRESSION *unary_expr, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_unary_expr(AST_UNARY_EXPRESSION *unary_expr, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (unary_expr == NULL) {
     return 1;
   }
 
-  if (generate_expression(unary_expr->operand, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(unary_expr->operand, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
 
@@ -641,62 +802,62 @@ static int generate_unary_expr(AST_UNARY_EXPRESSION *unary_expr, function_global
   return 0;
 }
 
-static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (binary_expr == NULL) {
     return 1;
   }
 
   if (binary_expr->op == BINARY_ADD) { // +
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "ADDS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "ADDS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "ADDS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
       fprintf(func_globals->function_body, "ADDS\n");
     } else if (binary_expr->left->resolved_type == TYPE_STRING && binary_expr->right->resolved_type == TYPE_STRING) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      fprintf(func_globals->function_body, "POPS %s$str1\n", var_prefix);
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      fprintf(func_globals->function_body, "POPS %s$str1\n", func_globals->var_prefix);
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      fprintf(func_globals->function_body, "POPS %s$str2\n", var_prefix);
-      fprintf(func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", var_prefix, var_prefix, var_prefix);
-      fprintf(func_globals->function_body, "PUSHS %s$concatstr\n", var_prefix);
+      fprintf(func_globals->function_body, "POPS %s$str2\n", func_globals->var_prefix);
+      fprintf(func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", func_globals->var_prefix, func_globals->var_prefix, func_globals->var_prefix);
+      fprintf(func_globals->function_body, "PUSHS %s$concatstr\n", func_globals->var_prefix);
       if (func_globals->was_concat == false) {
         func_globals->was_concat = true;
-        fprintf(func_globals->function_head, "DEFVAR %s$str1\n", var_prefix);
-        fprintf(func_globals->function_head, "DEFVAR %s$str2\n", var_prefix);
-        fprintf(func_globals->function_head, "DEFVAR %s$concatstr\n", var_prefix);
+        fprintf(func_globals->function_head, "DEFVAR %s$str1\n", func_globals->var_prefix);
+        fprintf(func_globals->function_head, "DEFVAR %s$str2\n", func_globals->var_prefix);
+        fprintf(func_globals->function_head, "DEFVAR %s$concatstr\n", func_globals->var_prefix);
       }
     } else {
       return 1;
@@ -704,35 +865,35 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_SUB) { // -
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "SUBS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "SUBS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "SUBS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
@@ -743,35 +904,35 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_MUL) { // *
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "MULS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "MULS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "MULS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
@@ -782,35 +943,35 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_DIV) { // /
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "IDIVS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "DIVS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "DIVS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
@@ -821,44 +982,44 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_LT) { // <
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
       fprintf(func_globals->function_body, "LTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_STRING && binary_expr->right->resolved_type == TYPE_STRING) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
@@ -868,44 +1029,44 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_GT) { // >
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
       fprintf(func_globals->function_body, "GTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_STRING && binary_expr->right->resolved_type == TYPE_STRING) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
@@ -915,48 +1076,48 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_LE) { // <=
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
       fprintf(func_globals->function_body, "GTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_STRING && binary_expr->right->resolved_type == TYPE_STRING) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "GTS\n");
@@ -967,48 +1128,48 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_GE) { // >=
     if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
       fprintf(func_globals->function_body, "LTS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_STRING && binary_expr->right->resolved_type == TYPE_STRING) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "LTS\n");
@@ -1019,27 +1180,27 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_EQ) { // ==
     if (binary_expr->left->resolved_type == binary_expr->right->resolved_type) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "EQS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "EQS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
@@ -1050,29 +1211,29 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_NE) { // !=
     if (binary_expr->left->resolved_type == binary_expr->right->resolved_type) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "EQS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_INT && binary_expr->right->resolved_type == TYPE_DOUBLE) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "EQS\n");
       fprintf(func_globals->function_body, "NOTS\n");
     } else if (binary_expr->left->resolved_type == TYPE_DOUBLE && binary_expr->right->resolved_type == TYPE_INT) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "INT2FLOATS\n");
@@ -1084,10 +1245,10 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_AND) { // &&
     if (binary_expr->left->resolved_type == TYPE_BOOLEAN && binary_expr->right->resolved_type == TYPE_BOOLEAN) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "ANDS\n");
@@ -1097,10 +1258,10 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
 
   } else if (binary_expr->op == BINARY_OR) { // ||
     if (binary_expr->left->resolved_type == TYPE_BOOLEAN && binary_expr->right->resolved_type == TYPE_BOOLEAN) {
-      if (generate_expression(binary_expr->left, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->left, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
-      if (generate_expression(binary_expr->right, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(binary_expr->right, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "ORS\n");
@@ -1115,13 +1276,13 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
   return 0;
 }
 
-static int generate_call(AST_CALL *call, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_call(AST_CALL *call, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (call == NULL) {
     return 1;
   }
 
   if (call->callee_kind == CALLEE_EXTENSION) {
-    if (generate_expression(call->receiver, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_expression(call->receiver, &func_globals, &var_list, &builtins) != 0) {
         return 1;
     }
   }
@@ -1130,7 +1291,7 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, char va
     AST_ARG_LIST *arg_list = &call->argument_lists[i];
     for (size_t j = 0; i < arg_list->argument_count; j++) {
       AST_EXPRESSION *arg = arg_list->arguments[j];
-      if (generate_expression(arg, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(arg, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
     }
@@ -1176,12 +1337,12 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, char va
   return 0;
 }
 
-static int generate_member(AST_MEMBER *member, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_member(AST_MEMBER *member, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (member == NULL) {
     return 1;
   }
   
-  if (generate_expression(member->receiver, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(member->receiver, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
 
@@ -1205,7 +1366,7 @@ static int generate_member(AST_MEMBER *member, function_globals *func_globals, c
   return 0;
 }
 
-static int generate_interpolated(AST_INTERPOLATED *interpolated, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_interpolated(AST_INTERPOLATED *interpolated, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (interpolated == NULL) {
     return 1;
   }
@@ -1216,7 +1377,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
     if (interpolated->parts[i].is_literal == true) {
       char *string = convert_string(interpolated->parts[i].text, strlen(interpolated->parts[i].text));
       if (interpolated->part_count > 1) {
-        fprintf(func_globals->function_body, "MOV %s$str%i string@%s\n", var_prefix, is_first ? "1" : "2", string);
+        fprintf(func_globals->function_body, "MOV %s$str%i string@%s\n", func_globals->var_prefix, is_first ? "1" : "2", string);
         free(string);
       } else {
         fprintf(func_globals->function_body, "PUSHS string@%s\n", string);
@@ -1224,12 +1385,12 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
         break;
       }
     } else {
-      if (generate_expression(interpolated->parts[i].expression, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_expression(interpolated->parts[i].expression, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
       fprintf(func_globals->function_body, "CALL !toStr\n");
       if (interpolated->part_count > 1) {
-        fprintf(func_globals->function_body, "POPS %s$str%i\n", var_prefix, is_first ? "1" : "2");
+        fprintf(func_globals->function_body, "POPS %s$str%i\n", func_globals->var_prefix, is_first ? "1" : "2");
       } else {
         break;
       }
@@ -1238,27 +1399,27 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
       is_first = false;
       continue;
     }
-    fprintf(func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", var_prefix, var_prefix, var_prefix);    
+    fprintf(func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", func_globals->var_prefix, func_globals->var_prefix, func_globals->var_prefix);    
     if (i < interpolated->part_count - 1) {
-      fprintf(func_globals->function_body, "MOV %s$str1 %s$concatstr\n", var_prefix, var_prefix);
+      fprintf(func_globals->function_body, "MOV %s$str1 %s$concatstr\n", func_globals->var_prefix, func_globals->var_prefix);
     }
   }
 
   if (interpolated->part_count > 1) {
-    fprintf(func_globals->function_body, "PUSHS %s$concatstr\n", var_prefix);
+    fprintf(func_globals->function_body, "PUSHS %s$concatstr\n", func_globals->var_prefix);
   }
 
   if (func_globals->was_concat == false) {
     func_globals->was_concat = true;
-    fprintf(func_globals->function_head, "DEFVAR %s$str1\n", var_prefix);
-    fprintf(func_globals->function_head, "DEFVAR %s$str2\n", var_prefix);
-    fprintf(func_globals->function_head, "DEFVAR %s$concatstr\n", var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$str1\n", func_globals->var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$str2\n", func_globals->var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$concatstr\n", func_globals->var_prefix);
   }
 
   return 0;
 }
 
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (if_stmt == NULL) {
     return 1;
   }
@@ -1266,7 +1427,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var
   size_t prev_mangling = func_globals->var_mangling;
   func_globals->if_counter++;
 
-  if (generate_expression(if_stmt->condition, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(if_stmt->condition, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
 
@@ -1280,7 +1441,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
     }
@@ -1293,7 +1454,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
     }
@@ -1306,7 +1467,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+      if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
         return 1;
       }
     }
@@ -1324,7 +1485,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, char var
   return 0;
 }
 
-static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (while_stmt == NULL) {
     return 1;
   }
@@ -1333,7 +1494,7 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
   func_globals->while_counter++;
 
   fprintf(func_globals->function_body, "LABEL %s$while$%i$loop\n", func_globals->function_name, func_globals->while_counter);
-  if (generate_expression(while_stmt->condition, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(while_stmt->condition, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
 
@@ -1346,7 +1507,7 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
     if (statement == NULL) {
       return 1;
     }
-    if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   }
@@ -1364,15 +1525,15 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
   return 0;
 }
 
-static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, char var_prefix, var_list_node *var_list, builtins_checklist *builtins) {
+static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_list_node *var_list, builtins_checklist *builtins) {
   if (for_stmt == NULL) {
     return 1;
   }
 
   if (func_globals->for_counter > 0) {
-    fprintf(func_globals->function_head, "DEFVAR %s$for$to\n", var_prefix);
-    fprintf(func_globals->function_head, "DEFVAR %s$for$step\n", var_prefix);
-    fprintf(func_globals->function_head, "DEFVAR %s$for$check\n", var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$for$to\n", func_globals->var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$for$step\n", func_globals->var_prefix);
+    fprintf(func_globals->function_head, "DEFVAR %s$for$check\n", func_globals->var_prefix);
   }
   
   size_t prev_mangling = func_globals->var_mangling;
@@ -1390,35 +1551,35 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, char 
   var_node_new->next = var_node_old;
   *var_list = *var_node_new;
 
-  if (generate_expression(for_stmt->from, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(for_stmt->from, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
-  fprintf(func_globals->function_body, "POPS %s%s$%i\n", var_prefix, for_stmt->var_name, func_globals->var_mangling);
+  fprintf(func_globals->function_body, "POPS %s%s$%i\n", func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling);
 
-  if (generate_expression(for_stmt->to, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+  if (generate_expression(for_stmt->to, &func_globals, &var_list, &builtins) != 0) {
     return 1;
   }
-  fprintf(func_globals->function_body, "POPS %s$for$to\n", var_prefix);
+  fprintf(func_globals->function_body, "POPS %s$for$to\n", func_globals->var_prefix);
 
   if (for_stmt->step != NULL) {
-    if (generate_expression(for_stmt->step, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_expression(for_stmt->step, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
-    fprintf(func_globals->function_body, "POPS %s$for$step\n", var_prefix);
-    fprintf(func_globals->function_body, "PUSHS %s$for$step\n", var_prefix);
+    fprintf(func_globals->function_body, "POPS %s$for$step\n", func_globals->var_prefix);
+    fprintf(func_globals->function_body, "PUSHS %s$for$step\n", func_globals->var_prefix);
     fprintf(func_globals->function_body, "PUSHS int@0\n");
     fprintf(func_globals->function_body, "JUMPIFEQS %s$for$%i$error\n", func_globals->function_name, func_globals->for_counter);
   } else {
-    fprintf(func_globals->function_body, "MOVE %s$for$step int@1\n", var_prefix);
+    fprintf(func_globals->function_body, "MOVE %s$for$step int@1\n", func_globals->var_prefix);
   }
 
   fprintf(func_globals->function_body, "LABEL %s$for$%i$loop\n", func_globals->function_name, func_globals->for_counter);
   if (for_stmt->is_exclusive) {
-    fprintf(func_globals->function_body, "LT %s$for$check %s%s$%i %s$for$to\n", var_prefix, var_prefix, for_stmt->var_name, func_globals->var_mangling, var_prefix);
-    fprintf(func_globals->function_body, "JUMPIFEQ %s$for$%i$end %s$for$check bool@false\n", func_globals->function_name, func_globals->for_counter, var_prefix);
+    fprintf(func_globals->function_body, "LT %s$for$check %s%s$%i %s$for$to\n", func_globals->var_prefix, func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix);
+    fprintf(func_globals->function_body, "JUMPIFEQ %s$for$%i$end %s$for$check bool@false\n", func_globals->function_name, func_globals->for_counter, func_globals->var_prefix);
   } else {
-    fprintf(func_globals->function_body, "GT %s$for$check %s%s$%i %s$for$to\n", var_prefix, var_prefix, for_stmt->var_name, func_globals->var_mangling, var_prefix);
-    fprintf(func_globals->function_body, "JUMPIFEQ %s$for$%i$end %s$for$check bool@true\n", func_globals->function_name, func_globals->for_counter, var_prefix);
+    fprintf(func_globals->function_body, "GT %s$for$check %s%s$%i %s$for$to\n", func_globals->var_prefix, func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix);
+    fprintf(func_globals->function_body, "JUMPIFEQ %s$for$%i$end %s$for$check bool@true\n", func_globals->function_name, func_globals->for_counter, func_globals->var_prefix);
   }
 
   for (size_t i = 0; i < for_stmt->guard_count; i++) {
@@ -1426,7 +1587,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, char 
     if (guard == NULL) {
       return 1;
     }
-    if (generate_statement(guard, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_statement(guard, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
     fprintf(func_globals->function_body, "PUSHS bool@false\n");
@@ -1438,12 +1599,12 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, char 
     if (statement == NULL) {
       return 1;
     }
-    if (generate_statement(statement, &func_globals, var_prefix, &var_list, &builtins) != 0) {
+    if (generate_statement(statement, &func_globals, &var_list, &builtins) != 0) {
       return 1;
     }
   }
 
-  fprintf(func_globals->function_body, "ADD %s%s$%i %s%s$%i %s$for$step\n", var_prefix, for_stmt->var_name, func_globals->var_mangling, var_prefix, for_stmt->var_name, func_globals->var_mangling, var_prefix);
+  fprintf(func_globals->function_body, "ADD %s%s$%i %s%s$%i %s$for$step\n", func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix);
   fprintf(func_globals->function_body, "JUMP %s$for$%i$loop\n", func_globals->function_name, func_globals->for_counter);
 
   if (for_stmt->step != NULL) {
