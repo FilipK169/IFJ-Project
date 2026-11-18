@@ -125,6 +125,73 @@ void parser_leave(t_parser *p) {
     p->depth--;
 }
 
+/**
+ * Ends a statement: ';' or EOL. Nothing is needed when the statement itself ended
+ * with a block (its DEDENT is the end) or when the enclosing block / file ends.
+ */
+t_parse_rc parser_end_statement(t_parser *p) {
+    if (p->cur.type == TOKEN_SEMICOLON) {
+        TRY(parser_advance(p));
+        if (p->cur.type == TOKEN_EOL) { // tolerate a trailing ';'
+            TRY(parser_advance(p));
+        }
+        return PARSE_OK;
+    }
+    if (p->cur.type == TOKEN_EOL) {
+        return parser_advance(p);
+    }
+    if (p->after_block || p->cur.type == TOKEN_DEDENT || p->cur.type == TOKEN_EOF) {
+        return PARSE_OK;
+    }
+    return parser_syntax_error(p, "expected end of statement, got %s", token_type_name(p->cur.type));
+}
+
+/**
+ * Called right after a ',' inside parentheses (current token = the ',').
+ * Consumes it. A trailing comma is only legal when ')' is on a LATER line
+ * (the lexer ignores newlines inside parentheses, so we compare line numbers).
+ */
+t_parse_rc parser_skip_comma(t_parser *p, bool *list_ends) {
+    int comma_line = p->cur.line;
+    TRY(parser_advance(p));
+    *list_ends = false;
+    if (p->cur.type == TOKEN_RIGHT_PAREN) {
+        if (p->cur.line <= comma_line) {
+            return parser_syntax_error(p, "trailing comma must be followed by a line break before ')'");
+        }
+        *list_ends = true;
+    }
+    return PARSE_OK;
+}
+
+/** Handles `EOL else` (else on its own line below an inline branch). */
+t_parse_rc parser_skip_eol_before_else(t_parser *p) {
+    if (p->cur.type == TOKEN_EOL) {
+        t_token_type next;
+        TRY(parser_peek_type(p, &next));
+        if (next == TOKEN_KW_ELSE) {
+            return parser_advance(p);
+        }
+    }
+    return PARSE_OK;
+}
+
+t_parse_rc parse_type(t_parser *p, ENUM_DATA_TYPE *out) {
+    switch (p->cur.type) {
+    case TOKEN_KW_INT:
+        *out = TYPE_INT;     break;
+    case TOKEN_KW_DOUBLE:
+        *out = TYPE_DOUBLE;  break;
+    case TOKEN_KW_STRING:
+        *out = TYPE_STRING;  break;
+    case TOKEN_KW_UNIT:
+        *out = TYPE_UNIT;    break;
+    default:
+        return parser_syntax_error(p, "expected a type, got %s", token_type_name(p->cur.type));
+    }
+    return parser_advance(p);
+}
+
 // ---------- functions and program ---------- //
 
 /** import ifj26.*  EOL */

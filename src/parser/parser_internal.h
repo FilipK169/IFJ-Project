@@ -2,8 +2,7 @@
  * @file parser_internal.h
  * @brief Private helpers shared between the parser .c files of IFJ26.
  *
- * Only the parser .c files include this header, everybody else includes
- * parser.h.
+ * Only the parser .c files include this header, everybody else includes parser.h.
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -127,5 +126,17 @@ t_parse_rc parser_enter(t_parser *p);
 
 /** @brief Leaves a nesting level entered by parser_enter(). */
 void parser_leave(t_parser *p);
+
+/** @brief Ends a statement: ';', EOL, or nothing when the statement ended with a block / the block ends. */
+t_parse_rc parser_end_statement(t_parser *p);
+
+/** @brief Consumes a ',' inside parentheses; *list_ends is set for a legal trailing comma. */
+t_parse_rc parser_skip_comma(t_parser *p, bool *list_ends);
+
+/** @brief Consumes an EOL that is directly followed by `else`. */
+t_parse_rc parser_skip_eol_before_else(t_parser *p);
+
+/** @brief Parses a type keyword (Int, Double, String, Unit). */
+t_parse_rc parse_type(t_parser *p, ENUM_DATA_TYPE *out);
 
 #endif // PARSER_INTERNAL_H
