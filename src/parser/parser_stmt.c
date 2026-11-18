@@ -185,14 +185,14 @@ static t_parse_rc parse_return(t_parser *p, AST_STATEMENT **out) {
 
     TRY(parser_advance(p)); // 'return'
     switch (p->cur.type) {
-    case TOKEN_EOL:
-    case TOKEN_SEMICOLON:
-    case TOKEN_DEDENT:
-    case TOKEN_EOF:
-        break; // plain `return`
-    default:
-        TRY(parse_rhs(p, &value));
-        break;
+        case TOKEN_EOL:
+        case TOKEN_SEMICOLON:
+        case TOKEN_DEDENT:
+        case TOKEN_EOF:
+            break; // plain `return`
+        default:
+            TRY(parse_rhs(p, &value));
+            break;
     }
 
     AST_STATEMENT *stmt = ast_statement_create_return(value, loc);

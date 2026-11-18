@@ -9,7 +9,7 @@ LEXSRC = $(LEXDIR)/token.c $(LEXDIR)/lexer.c $(LEXDIR)/lexer_chars.c \
          $(LEXDIR)/lexer_layout.c $(LEXDIR)/lexer_scan.c $(LEXDIR)/lexer_string.c
 ASTSRC = $(ASTDIR)/ast.c
 
-SRC = parser.c parser_test.c $(LEXSRC) $(ASTSRC)
+SRC = parser.c parser_expr.c parser_stmt.c parser_test.c $(LEXSRC) $(ASTSRC)
 HDR = parser.h parser_internal.h \
       $(LEXDIR)/token.h $(LEXDIR)/lexer.h $(LEXDIR)/lexer_internal.h \
       $(ASTDIR)/ast.h

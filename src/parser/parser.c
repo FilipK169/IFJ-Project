@@ -179,13 +179,17 @@ t_parse_rc parser_skip_eol_before_else(t_parser *p) {
 t_parse_rc parse_type(t_parser *p, ENUM_DATA_TYPE *out) {
     switch (p->cur.type) {
     case TOKEN_KW_INT:
-        *out = TYPE_INT;     break;
+        *out = TYPE_INT;
+        break;
     case TOKEN_KW_DOUBLE:
-        *out = TYPE_DOUBLE;  break;
+        *out = TYPE_DOUBLE;
+        break;
     case TOKEN_KW_STRING:
-        *out = TYPE_STRING;  break;
+        *out = TYPE_STRING;
+        break;
     case TOKEN_KW_UNIT:
-        *out = TYPE_UNIT;    break;
+        *out = TYPE_UNIT;
+        break;
     default:
         return parser_syntax_error(p, "expected a type, got %s", token_type_name(p->cur.type));
     }
@@ -213,16 +217,135 @@ static t_parse_rc parse_prolog(t_parser *p) {
     return PARSE_OK;
 }
 
-static t_parse_rc parse_program(t_parser *p, AST_PROGRAM *program) {
-    (void)program; // temp
+/** name : type */
+static t_parse_rc parse_parameter(t_parser *p, AST_FUNCTION_DEF *fn) {
+    t_parse_rc rc;
+    SOURCE_LOCATION loc = loc_of(&p->cur);
+    ENUM_DATA_TYPE type;
+    char *name;
 
+    if (p->cur.type != TOKEN_ID) {
+        return parser_syntax_error(p, "expected a parameter name, got %s",
+                                   token_type_name(p->cur.type));
+    }
+    name = parser_strdup(p->cur.value.str_val);
+    if (name == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+
+    CHECK(parser_advance(p));
+    CHECK(parser_expect(p, TOKEN_COLON, "':' after the parameter name"));
+    CHECK(parse_type(p, &type));
+    rc = ast_rc(ast_function_def_add_parameter(fn, name, type, loc));
+
+fail:
+    free(name);
+    return rc;
+}
+
+/** '(' [param {',' param} [',']] ')'  - exactly one list in the base language */
+static t_parse_rc parse_param_list(t_parser *p, AST_FUNCTION_DEF *fn) {
+    TRY(ast_rc(ast_function_def_add_param_list(fn)));
+    TRY(parser_advance(p)); // '('
+
+    if (p->cur.type != TOKEN_RIGHT_PAREN) {
+        for (;;) {
+            TRY(parse_parameter(p, fn));
+            if (p->cur.type != TOKEN_COMMA) {
+                break;
+            }
+            bool ends;
+            TRY(parser_skip_comma(p, &ends));
+            if (ends) {
+                break;
+            }
+        }
+    }
+    return parser_expect(p, TOKEN_RIGHT_PAREN, "')'");
+}
+
+/** def name (params) [: type] = body */
+static t_parse_rc parse_function(t_parser *p, bool is_main, AST_FUNCTION_DEF **out) {
+    t_parse_rc rc;
+    AST_FUNCTION_DEF *fn = NULL;
+
+    if (p->cur.type != TOKEN_KW_DEF) {
+        return parser_syntax_error(p, "expected 'def', got %s",
+                                   token_type_name(p->cur.type));
+    }
+    TRY(parser_advance(p));
+    if (p->cur.type != TOKEN_ID) {
+        return parser_syntax_error(p, "expected a function name, got %s",
+                                   token_type_name(p->cur.type));
+    }
+
+    fn = ast_function_def_create(p->cur.value.str_val, loc_of(&p->cur));
+    if (fn == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+    fn->is_main = is_main;
+    CHECK(parser_advance(p));
+
+    // base language: exactly one parameter list required
+    if (p->cur.type != TOKEN_LEFT_PAREN) {
+        rc = parser_syntax_error(p, "expected '(' after the function name, got %s",
+                                 token_type_name(p->cur.type));
+        goto fail;
+    }
+    CHECK(parse_param_list(p, fn));
+
+    if (p->cur.type == TOKEN_COLON) {
+        CHECK(parser_advance(p));
+        CHECK(parse_type(p, &fn->declared_return_type));
+    }
+    CHECK(parser_expect(p, TOKEN_ASSIGN, "'=' before the function body"));
+
+    if (p->cur.type == TOKEN_EOL) {
+        CHECK(parse_indented_block(p, &fn->body));
+    } else {
+        CHECK(parser_inline_expr_block(p, &fn->body));
+        CHECK(parser_end_statement(p));
+    }
+
+    *out = fn;
+    return PARSE_OK;
+
+fail:
+    ast_function_def_destroy(fn);
+    return rc;
+}
+
+/** Parses one function and appends it to the program (consumed in every case). */
+static t_parse_rc parse_and_add_function(t_parser *p, AST_PROGRAM *program, bool is_main) {
+    AST_FUNCTION_DEF *fn = NULL;
+    TRY(parse_function(p, is_main, &fn));
+    return ast_rc(ast_program_add_function(program, fn));
+}
+
+static t_parse_rc parse_program(t_parser *p, AST_PROGRAM *program) {
     TRY(parse_prolog(p));
 
-    //temp
-    while (p->cur.type != TOKEN_EOF) {
-        TRY(parser_advance(p));
+    for (;;) {
+        switch (p->cur.type) {
+        case TOKEN_EOF:
+            return PARSE_OK;
+
+        case TOKEN_ANNOT_MAIN:
+            TRY(parser_advance(p));
+            if (p->cur.type == TOKEN_EOL) { // @main on its own line
+                TRY(parser_advance(p));
+            }
+            TRY(parse_and_add_function(p, program, true));
+            break;
+
+        case TOKEN_KW_DEF:
+            TRY(parse_and_add_function(p, program, false));
+            break;
+
+        default:
+            return parser_syntax_error(p, "expected a function definition, got %s", token_type_name(p->cur.type));
+        }
     }
-    return PARSE_OK;
 }
 
 // ========================================== //
