@@ -394,6 +394,7 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(var_decl->initializer->data.string_literal.value, var_decl->initializer->data.string_literal.length);
     fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", var_prefix, var_decl->name, local_mangling, string);
+    free(string);
 
   } else if (var_decl->initializer->type == EXPR_UNIT_LITERAL) {
     fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", var_prefix, var_decl->name, local_mangling);
@@ -472,6 +473,7 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
   } else if (assignment->value->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(assignment->value->data.string_literal.value, assignment->value->data.string_literal.length);
     fprintf(func_globals->function_body, "MOVE %s%s$%i string@%s\n", var_prefix, assignment->name, func_globals->var_mangling, string);
+    free(string);
 
   } else if (assignment->value->type == EXPR_UNIT_LITERAL) {
     fprintf(func_globals->function_body, "MOVE %s%s$%i nil@nil\n", var_prefix, assignment->name, func_globals->var_mangling);
@@ -564,6 +566,7 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
   } else if (expression->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(expression->data.string_literal.value, expression->data.string_literal.length);
     fprintf(func_globals->function_body, "PUSHS string@%s\n", string);
+    free(string);
 
   } else if (expression->type == EXPR_UNIT_LITERAL) {
     fprintf(func_globals->function_body, "PUSHS nil@nil\n");
@@ -1214,8 +1217,10 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
       char *string = convert_string(interpolated->parts[i].text, strlen(interpolated->parts[i].text));
       if (interpolated->part_count > 1) {
         fprintf(func_globals->function_body, "MOV %s$str%i string@%s\n", var_prefix, is_first ? "1" : "2", string);
+        free(string);
       } else {
         fprintf(func_globals->function_body, "PUSHS string@%s\n", string);
+        free(string);
         break;
       }
     } else {
@@ -1470,9 +1475,11 @@ size_t find_variable(var_list_node *var_list, char name) {
 }
 
 static char* convert_string(char *string, size_t length) {
-  char *converted;
+  char *converted = malloc((length * 4 + 1) * sizeof(char));
+  size_t conv_len = 0;
   if (length == 0) {
-    converted = "\\000";
+    sprintf(converted, "\\000");
+    conv_len = 4;
   }
 
   for (size_t i = 0; i < length; i++) {
@@ -1485,15 +1492,18 @@ static char* convert_string(char *string, size_t length) {
       if (string[i] < 10) {
         escape[2] = '0';
         escape[3] = ascii_value[0];
-      }
+      } else {
       escape[2] = ascii_value[0];
       escape[3] = ascii_value[1];
+      }
       strcat(converted, escape);
-
+      conv_len = conv_len + 4;
     } else {
       strcat(converted, string[i]);
+      conv_len++;
     }
   }
+  converted[conv_len] = '\0';
   return converted;
 }
 
