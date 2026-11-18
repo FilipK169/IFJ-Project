@@ -139,4 +139,12 @@ t_parse_rc parser_skip_eol_before_else(t_parser *p);
 /** @brief Parses a type keyword (Int, Double, String, Unit). */
 t_parse_rc parse_type(t_parser *p, ENUM_DATA_TYPE *out);
 
+// ---------- parser_expr.c: expressions ---------- //
+
+/** @brief One expression (no calls; only literals, IDs, operators, grouping). */
+t_parse_rc parse_expression(t_parser *p, AST_EXPRESSION **out);
+
+/** @brief Right-hand side: a call `ID (...)` or a plain expression. */
+t_parse_rc parse_rhs(t_parser *p, AST_EXPRESSION **out);
+
 #endif // PARSER_INTERNAL_H
