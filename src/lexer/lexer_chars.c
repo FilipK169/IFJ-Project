@@ -36,7 +36,8 @@
 
 /*
  * AI use
- * Prompt: error function with a varaible amount of arguments that prints the error location and message
+ * Prompt: error function with a variable amount of arguments that prints the error location and message according to the input format string
+ * @note the functions were then later adjused to the project environment
  */
 t_lex_rc lexer_error(t_lexer *lx, const char *fmt, ...) {
     fprintf(stderr, "Lexical error at %d:%d: ", lx->line, lx->column);
@@ -51,6 +52,13 @@ t_lex_rc lexer_error(t_lexer *lx, const char *fmt, ...) {
 }
 /*
  * END AI
+ */
+
+
+ /*
+ * AI use
+ * Prompt: generate generic functions for a string buffer: init, clear, append char, copy, free
+ * @note the functions were then later adjused to the project environment
  */
 
 // ---------- string buffer ---------- //
@@ -105,6 +113,10 @@ void strbuf_free(t_strbuf *sb) {
     sb->len = 0;
     sb->cap = 0;
 }
+
+/*
+ * END AI
+ */
 
 // ---------- characters ---------- //
 

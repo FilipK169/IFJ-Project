@@ -1,9 +1,10 @@
 /**
  * @file lexer_internal.h
- * @brief Private helpers of the IFJ26 lexical analyzer.
+ * @brief Private helpers shared between the lexer .c files of IFJ26.
  *
- * Only the lexer's own .c files (lexer.c, lexer_scan.c, ...) include this
- * header. The parser and main must use lexer.h only.
+ * Only the lexer .c files include this header, the parser and main only
+ * include lexer.h. Anything used by a single .c file is static in that file
+ * and is NOT declared here.
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -30,9 +31,16 @@
 // ================ MACROS ================== //
 // ========================================== //
 
+#define LEX_EMPTY (-2) // marker of an empty look-ahead slot (EOF is -1)
+
+/*
+* AI use
+* Prompt: macro that evaluates an expression and returns it from the current function if it is not LEX_OK
+* @note the macro was then later adjused to the project environment
+*/
+
 /**
  * @brief Evaluates `expr` (a t_lex_rc) and returns it from the current function if it is not LEX_OK.
- * Used to skip writing rc != LEX_OK checks after every call.
  */
 #define LEX_TRY(expr)                                                          \
     do {                                                                       \
@@ -42,69 +50,67 @@
         }                                                                      \
     } while (0)
 
+/*
+ * END AI
+ */
+
+// ========================================== //
+// ============ INLINE HELPERS ============== //
+// ========================================== //
+
+/**
+ * AI use
+ * Prompt: inline function that fills a token with type, line and column, zeroes the value, and marks the current logical line as non-empty
+ * @note the function was then later adjused to the project environment
+ * @note AI was mainly used to discover what inline is
+ */
+
+/**
+ * @brief Fills *tok with a token with no value and marks the current logical line as non-empty.
+ *
+ * Note: token_set zeroes the token, so a value (e.g. str_val) must be assigned AFTER calling this function.
+ * static inline = every .c file gets its own private copy, nothing is exported.
+ *
+ * @return Always LEX_OK (so scanners can write `return lexer_emit(...);`).
+ */
+static inline t_lex_rc lexer_emit(t_lexer *lx, t_token *tok, t_token_type type, int line, int col) {
+    token_set(tok, type, line, col);
+    lx->line_has_tokens = true;
+    return LEX_OK;
+}
+
 // ========================================== //
 // ===== DECLARATION OF PRIVATE FUNCTIONS === //
 // ========================================== //
 
-// ---------- string buffer ---------- //
+// ---------- lexer_chars.c: string buffer ---------- //
 
-/**
- * @brief Initializes an empty string buffer.
- *
- * @param[out] sb Buffer to initialize.
- *
- * @return Result code.
- * @retval LEX_OK - buffer initialized
- * @retval LEX_ERR_INTERNAL - memory allocation failed
- */
+/** @brief Initializes an empty string buffer. @retval LEX_ERR_INTERNAL malloc failed */
 t_lex_rc strbuf_init(t_strbuf *sb);
 
-/**
- * @brief Clears the buffer (len = 0), keeps the allocated memory.
- *
- * @param[in,out] sb Buffer to clear.
- */
+/** @brief Clears the buffer (len = 0), keeps the allocated memory. */
 void strbuf_clear(t_strbuf *sb);
 
-/**
- * @brief Appends one character to the buffer (grows it when needed).
- *
- * @param[in,out] sb Buffer to append to.
- * @param[in] c Character to append.
- *
- * @return Result code.
- * @retval LEX_OK - character appended
- * @retval LEX_ERR_INTERNAL - memory allocation failed
- */
+/** @brief Appends one character (grows the buffer when needed). @retval LEX_ERR_INTERNAL realloc failed */
 t_lex_rc strbuf_append_char(t_strbuf *sb, char c);
 
-/**
- * @brief Returns a malloc'd copy of the buffer content, then clears the buffer.
- *
- * @param[in,out] sb Buffer to take the content from.
- *
- * @return Heap allocated NUL-terminated string, the caller must free it.
- * @retval NULL - memory allocation failed
- */
+/** @brief Returns a malloc'd copy of the content (caller frees), then clears the buffer. NULL on failure. */
 char *strbuf_take(t_strbuf *sb);
 
-/**
- * @brief Frees the memory owned by the buffer.
- *
- * @param[in,out] sb Buffer to free.
- */
+/** @brief Frees the memory owned by the buffer. */
 void strbuf_free(t_strbuf *sb);
 
-// ---------- error reporting ---------- //
+// ---------- lexer_chars.c: error reporting ---------- //
+
+/*
+ * AI use
+ * Prompt: error function with a variable amount of arguments that prints the error location and message according to the input format string
+*/
 
 /**
  * @brief Prints "Lexical error at line:col: message" to stderr.
  *
- * Does not exit and does not free anything. Use it as
- * `return lexer_error(lx, "...");`.
- *
- * @param[in,out] lx Lexer in which the error occurred.
- * @param[in] fmt printf-style format string of the message.
+ * Does not exit and does not free anything. Use as `return lexer_error(lx, "...");`.
  *
  * @return Always LEX_ERR_LEXICAL.
  */
@@ -113,148 +119,72 @@ __attribute__((format(printf, 2, 3)))
 #endif
 t_lex_rc lexer_error(t_lexer *lx, const char *fmt, ...);
 
-// ---------- character level ---------- //
+/*
+ * END AI
+*/
 
-/**
- * @brief Reads a char and updates line/column.
- *
- * @param[in,out] lx Lexer to read from.
- *
- * @return The read character, or EOF.
- */
+// ---------- lexer_chars.c: character level ---------- //
+
+/** @brief Reads a char and updates line/column. Returns the char, or EOF. */
 int lexer_getc(t_lexer *lx);
 
-/**
- * @brief Looks at the next char without consuming it.
- *
- * @param[in,out] lx Lexer to read from.
- *
- * @return The next character, or EOF.
- */
+/** @brief Looks at the next char without consuming it. */
 int lexer_peekc(t_lexer *lx);
 
-/**
- * @brief Looks at the char after the next one without consuming anything.
- *
- * @param[in,out] lx Lexer to read from.
- *
- * @return The second next character, or EOF.
- */
+/** @brief Looks at the char after the next one without consuming anything. */
 int lexer_peekc2(t_lexer *lx);
 
-/**
- * @brief Skips characters up to the end of the current line (the '\n' itself
- *        is NOT consumed).
- *
- * @param[in,out] lx Lexer to read from.
- */
+/** @brief Skips characters up to the end of the line (the '\n' itself is NOT consumed). */
 void lexer_skip_to_eol(t_lexer *lx);
 
-// ---------- mode stack ---------- //
+// ---------- lexer_chars.c: mode stack ---------- //
 
-/**
- * @brief Pushes a new mode on the mode stack.
- *
- * @param[in,out] lx Lexer to modify.
- * @param[in] mode Mode to push.
- *
- * @return Result code.
- * @retval LEX_OK - mode pushed
- * @retval LEX_ERR_LEXICAL - mode stack is full (nesting too deep)
- */
+/** @brief Pushes a mode. @retval LEX_ERR_LEXICAL mode stack is full */
 t_lex_rc lexer_push_mode(t_lexer *lx, t_lex_mode mode);
 
-/**
- * @brief Pops the current mode from the mode stack.
- *
- * @param[in,out] lx Lexer to modify.
- *
- * @return Result code.
- * @retval LEX_OK - mode popped
- * @retval LEX_ERR_INTERNAL - the stack only holds the base mode
- */
+/** @brief Pops the current mode. @retval LEX_ERR_INTERNAL only the base mode is left */
 t_lex_rc lexer_pop_mode(t_lexer *lx);
 
-// ---------- layout ---------- //
+// ---------- lexer_layout.c ---------- //
 
 /**
- * @brief Handles indentation, run at the start of a logical line.
+ * @brief Skips spaces, tabs, '\r', line comments and (nested) block comments.
  *
- * Only queues INDENT / DEDENT (pending_indent / pending_dedents), tokens are
- * emitted by lexer_next.
+ * Stops in front of '\n', EOF or the first character of a real token.
+ * The '\n' itself is never consumed.
  *
- * @param[in,out] lx Lexer to modify.
+ * @param[out] had_eol Set to true if a block comment containing a newline was skipped.
  *
- * @return Result code.
- * @retval LEX_OK - indentation handled
- * @retval LEX_ERR_LEXICAL - tab indentation or inconsistent dedent
+ * @retval LEX_ERR_LEXICAL unterminated block comment
+ */
+t_lex_rc lexer_skip_whitespace_and_comments(t_lexer *lx, bool *had_eol);
+
+/**
+ * @brief Handles indentation at the start of a logical line.
+ *
+ * Only queues INDENT / DEDENT (pending_indent / pending_dedents),
+ * the tokens themselves are emitted by lexer_next.
+ *
+ * @retval LEX_ERR_LEXICAL tab indentation or inconsistent dedent
  */
 t_lex_rc lexer_handle_indentation(t_lexer *lx);
 
-// ---------- scanners ---------- //
+// ---------- lexer_scan.c ---------- //
 
 /**
  * @brief Scans a token in code mode (the big START state).
  *
- * Layout (newlines, indentation) is handled by lexer_next before this is
- * called. '}' is only valid in LEX_MODE_EXPR, where it ends a ${ ... }.
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- *
- * @return Result code.
- * @retval LEX_OK - token scanned
- * @retval LEX_ERR_LEXICAL - unknown character or malformed lexeme
- * @retval LEX_ERR_INTERNAL - memory allocation failed
+ * Layout (newlines, indentation) is handled by lexer_next before this is called.
+ * '}' is only valid in LEX_MODE_EXPR, where it ends a ${ ... }.
  */
 t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok);
 
-/**
- * @brief Scans an identifier or keyword.
- *
- * An identifier that is exactly "s" followed right away by '"' starts an
- * interpolated string instead: it pushes the string mode and returns the first
- * ISTR_TEXT part. A lone '_' is not an identifier (lexical error).
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- * @param[in] first First (already consumed) character of the lexeme.
- *
- * @return Result code.
- */
-t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first);
+// ---------- lexer_string.c ---------- //
 
-/**
- * @brief Scans an integer or double literal.
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- * @param[in] first First (already consumed) character of the lexeme: a digit,
- *                  or '.' when the caller has seen a digit right after it.
- *
- * @return Result code.
- */
-t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first);
-
-/**
- * @brief Scans a "..." string literal (the opening quote is consumed).
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- *
- * @return Result code.
- */
+/** @brief Scans a "..." string literal (the opening quote is already consumed). */
 t_lex_rc lexer_scan_string(t_lexer *lx, t_token *tok);
 
-/**
- * @brief Scans a """...""" multiline string literal (the opening quotes are
- *        consumed).
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- *
- * @return Result code.
- */
+/** @brief Scans a """...""" string literal (the opening quotes are already consumed). */
 t_lex_rc lexer_scan_multiline_string(t_lexer *lx, t_token *tok);
 
 /**
@@ -262,42 +192,9 @@ t_lex_rc lexer_scan_multiline_string(t_lexer *lx, t_token *tok);
  *        text (modes 1 and 3), or what follows a '$' (mode 99).
  *
  * Text parts end at the closing quote(s) or at a single '$' and are returned
- * as TOKEN_ISTR_TEXT (possibly empty). After a '$' the result is TOKEN_ISTR_ID
- * or TOKEN_ISTR_EXPR_BEGIN.
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] tok Token to fill.
- *
- * @return Result code.
+ * as TOKEN_ISTR_TEXT (possibly empty). After a '$' the result is
+ * TOKEN_ISTR_ID or TOKEN_ISTR_EXPR_BEGIN.
  */
 t_lex_rc lexer_scan_istr_part(t_lexer *lx, t_token *tok);
-
-/**
- * @brief Skips spaces, tabs, '\r', line comments and (nested) block comments.
- *
- * Stops in front of '\n', EOF or the first character of a real token. The
- * '\n' itself is never consumed.
- *
- * @param[in,out] lx Lexer to read from.
- * @param[out] had_eol Set to true if a block comment containing a newline was
- *                     skipped (the caller then treats it as an EOL and checks
- *                     that nothing but whitespace follows on that line).
- *
- * @return Result code.
- * @retval LEX_OK - skipped successfully
- * @retval LEX_ERR_LEXICAL - unterminated block comment
- */
-t_lex_rc lexer_skip_whitespace_and_comments(t_lexer *lx, bool *had_eol);
-
-// ---------- keyword table ---------- //
-
-/**
- * @brief Looks up a keyword by its name.
- *
- * @param[in] name NUL-terminated lexeme to look up.
- *
- * @return Matching keyword token type, or TOKEN_ID if it is not a keyword.
- */
-t_token_type lexer_keyword_lookup(const char *name);
 
 #endif // LEXER_INTERNAL_H

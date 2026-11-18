@@ -26,77 +26,132 @@
 
 const char *token_type_name(t_token_type type) {
     switch (type) {
-    case TOKEN_EOF:              return "EOF";
+    case TOKEN_EOF:
+        return "EOF";
 
     // Identifiers and literals
-    case TOKEN_ID:               return "ID";
-    case TOKEN_INT_LIT:          return "INT_LIT";
-    case TOKEN_DOUBLE_LIT:       return "DOUBLE_LIT";
-    case TOKEN_STRING_LIT:       return "STRING_LIT";
+    case TOKEN_ID:
+        return "ID";
+    case TOKEN_INT_LIT:
+        return "INT_LIT";
+    case TOKEN_DOUBLE_LIT:
+        return "DOUBLE_LIT";
+    case TOKEN_STRING_LIT:
+        return "STRING_LIT";
 
     // Keywords
-    case TOKEN_KW_DEF:           return "KW_DEF";
-    case TOKEN_KW_DO:            return "KW_DO";
-    case TOKEN_KW_DOUBLE:        return "KW_DOUBLE";
-    case TOKEN_KW_ELSE:          return "KW_ELSE";
-    case TOKEN_KW_IF:            return "KW_IF";
-    case TOKEN_KW_IMPORT:        return "KW_IMPORT";
-    case TOKEN_KW_INT:           return "KW_INT";
-    case TOKEN_KW_RETURN:        return "KW_RETURN";
-    case TOKEN_KW_STRING:        return "KW_STRING";
-    case TOKEN_KW_THEN:          return "KW_THEN";
-    case TOKEN_KW_UNIT:          return "KW_UNIT";
-    case TOKEN_KW_VAL:           return "KW_VAL";
-    case TOKEN_KW_VAR:           return "KW_VAR";
-    case TOKEN_KW_WHILE:         return "KW_WHILE";
+    case TOKEN_KW_DEF:
+        return "KW_DEF";
+    case TOKEN_KW_DO:
+        return "KW_DO";
+    case TOKEN_KW_DOUBLE:
+        return "KW_DOUBLE";
+    case TOKEN_KW_ELSE:
+        return "KW_ELSE";
+    case TOKEN_KW_IF:
+        return "KW_IF";
+    case TOKEN_KW_IMPORT:
+        return "KW_IMPORT";
+    case TOKEN_KW_INT:
+        return "KW_INT";
+    case TOKEN_KW_RETURN:
+        return "KW_RETURN";
+    case TOKEN_KW_STRING:
+        return "KW_STRING";
+    case TOKEN_KW_THEN:
+        return "KW_THEN";
+    case TOKEN_KW_UNIT:
+        return "KW_UNIT";
+    case TOKEN_KW_VAL:
+        return "KW_VAL";
+    case TOKEN_KW_VAR:
+        return "KW_VAR";
+    case TOKEN_KW_WHILE:
+        return "KW_WHILE";
 
     // Keywords from extensions
-    case TOKEN_KW_TRUE:          return "KW_TRUE";
-    case TOKEN_KW_FALSE:         return "KW_FALSE";
-    case TOKEN_KW_BOOLEAN:       return "KW_BOOLEAN";
-    case TOKEN_KW_FOR:           return "KW_FOR";
+    case TOKEN_KW_TRUE:
+        return "KW_TRUE";
+    case TOKEN_KW_FALSE:
+        return "KW_FALSE";
+    case TOKEN_KW_BOOLEAN:
+        return "KW_BOOLEAN";
+    case TOKEN_KW_FOR:
+        return "KW_FOR";
 
     // Operators
-    case TOKEN_PLUS:             return "PLUS";
-    case TOKEN_MINUS:            return "MINUS";
-    case TOKEN_MULTIPLY:         return "MULTIPLY";
-    case TOKEN_DIVIDE:           return "DIVIDE";
-    case TOKEN_LESS:             return "LESS";
-    case TOKEN_LESS_EQUAL:       return "LESS_EQUAL";
-    case TOKEN_GREATER:          return "GREATER";
-    case TOKEN_GREATER_EQUAL:    return "GREATER_EQUAL";
-    case TOKEN_EQUAL:            return "EQUAL";
-    case TOKEN_NOT_EQUAL:        return "NOT_EQUAL";
+    case TOKEN_PLUS:
+        return "PLUS";
+    case TOKEN_MINUS:
+        return "MINUS";
+    case TOKEN_MULTIPLY:
+        return "MULTIPLY";
+    case TOKEN_DIVIDE:
+        return "DIVIDE";
+    case TOKEN_LESS:
+        return "LESS";
+    case TOKEN_LESS_EQUAL:
+        return "LESS_EQUAL";
+    case TOKEN_GREATER:
+        return "GREATER";
+    case TOKEN_GREATER_EQUAL:
+        return "GREATER_EQUAL";
+    case TOKEN_EQUAL:
+        return "EQUAL";
+    case TOKEN_NOT_EQUAL:
+        return "NOT_EQUAL";
 
     // Operators from extensions
-    case TOKEN_NOT:              return "NOT";
-    case TOKEN_AND:              return "AND";
-    case TOKEN_OR:               return "OR";
+    case TOKEN_NOT:
+        return "NOT";
+    case TOKEN_AND:
+        return "AND";
+    case TOKEN_OR:
+        return "OR";
 
     // Syntax
-    case TOKEN_ASSIGN:           return "ASSIGN";
-    case TOKEN_COLON:            return "COLON";
-    case TOKEN_DOT:              return "DOT";
-    case TOKEN_LEFT_PAREN:       return "LEFT_PAREN";
-    case TOKEN_RIGHT_PAREN:      return "RIGHT_PAREN";
-    case TOKEN_COMMA:            return "COMMA";
-    case TOKEN_SEMICOLON:        return "SEMICOLON";
-    case TOKEN_ANNOT_MAIN:       return "ANNOT_MAIN";
-    case TOKEN_LEFT_ARROW:       return "LEFT_ARROW";
-    case TOKEN_UNION:            return "UNION";
+    case TOKEN_ASSIGN:
+        return "ASSIGN";
+    case TOKEN_COLON:
+        return "COLON";
+    case TOKEN_DOT:
+        return "DOT";
+    case TOKEN_LEFT_PAREN:
+        return "LEFT_PAREN";
+    case TOKEN_RIGHT_PAREN:
+        return "RIGHT_PAREN";
+    case TOKEN_COMMA:
+        return "COMMA";
+    case TOKEN_SEMICOLON:
+        return "SEMICOLON";
+    case TOKEN_ANNOT_MAIN:
+        return "ANNOT_MAIN";
+    case TOKEN_LEFT_ARROW:
+        return "LEFT_ARROW";
+    case TOKEN_UNION:
+        return "UNION";
 
     // Interpolated strings
-    case TOKEN_ISTR_BEGIN:       return "ISTR_BEGIN";
-    case TOKEN_ISTR_TEXT:        return "ISTR_TEXT";
-    case TOKEN_ISTR_ID:          return "ISTR_ID";
-    case TOKEN_ISTR_EXPR_BEGIN:  return "ISTR_EXPR_BEGIN";
-    case TOKEN_ISTR_EXPR_END:    return "ISTR_EXPR_END";
-    case TOKEN_ISTR_END:         return "ISTR_END";
+    case TOKEN_ISTR_BEGIN:
+        return "ISTR_BEGIN";
+    case TOKEN_ISTR_TEXT:
+        return "ISTR_TEXT";
+    case TOKEN_ISTR_ID:
+        return "ISTR_ID";
+    case TOKEN_ISTR_EXPR_BEGIN:
+        return "ISTR_EXPR_BEGIN";
+    case TOKEN_ISTR_EXPR_END:
+        return "ISTR_EXPR_END";
+    case TOKEN_ISTR_END:
+        return "ISTR_END";
 
     // Indentation
-    case TOKEN_EOL:              return "EOL";
-    case TOKEN_INDENT:           return "INDENT";
-    case TOKEN_DEDENT:           return "DEDENT";
+    case TOKEN_EOL:
+        return "EOL";
+    case TOKEN_INDENT:
+        return "INDENT";
+    case TOKEN_DEDENT:
+        return "DEDENT";
     }
 
     // enum value is added and not handled above.
