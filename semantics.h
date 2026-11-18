@@ -82,7 +82,6 @@ typedef enum {
  *         SEMANTICS_ERR_OTHER for other semantic errors,
  *         SEMANTICS_ERR_INTERNAL for internal compiler errors.
  */
-t_semantics_result semantics_analyze(AST_PROGRAM *program,
-                                     t_symbol_pools *out_pools);
+t_semantics_result semantics_analyze(AST_PROGRAM *program);
 
 #endif // SEMANTICS_H
