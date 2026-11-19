@@ -1,48 +1,18 @@
-# ========================================== #
-# ================ CONFIG ================== #
-# ========================================== #
-
 CC = gcc
-AR = ar
-
 CFLAGS = -std=c17 -Wall -Wextra -Wpedantic -g -O0
-CPPFLAGS = -I.
+CPPFLAGS = -Isrc
 
-TARGET = libsemantics.a
+TARGET = ifj26compiler
 
-SOURCES = bst.c \
-          symtable.c \
-          semantics.c \
-          ast.c
+SOURCES = $(wildcard src/*.c)
+HEADERS = $(wildcard src/*.h)
 
-OBJECTS = $(SOURCES:.c=.o)
-DEPS = $(OBJECTS:.o=.d)
-
-TEST_TARGET = test_semantics
-
-.PHONY: all clean rebuild test
-
-test: $(TARGET) test_semantics.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) test_semantics.c $(TARGET) -o $(TEST_TARGET)
-	./$(TEST_TARGET)
-
-# ========================================== #
-# ================ TARGETS ================= #
-# ========================================== #
-
-.PHONY: all clean rebuild
+.PHONY: all clean
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
-	$(AR) rcs $@ $^
-
-%.o: %.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+$(TARGET): $(SOURCES) $(HEADERS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@
 
 clean:
-	rm -f $(OBJECTS) $(DEPS) $(TARGET) $(TEST_TARGET)
-
-rebuild: clean all
-
--include $(DEPS)
+	rm -f $(TARGET)
