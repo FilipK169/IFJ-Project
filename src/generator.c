@@ -1512,7 +1512,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
         return 1;
       }
       if (interpolated->part_count > 1) {
-        buffer_printf(&func_globals->function_body, "MOV %s$str%s string@%s\n", func_globals->var_prefix, is_first ? "1" : "2", string);
+        buffer_printf(&func_globals->function_body, "MOVE %s$str%s string@%s\n", func_globals->var_prefix, is_first ? "1" : "2", string);
         free(string);
       } else {
         buffer_printf(&func_globals->function_body, "PUSHS string@%s\n", string);
