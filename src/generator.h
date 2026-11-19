@@ -18,12 +18,7 @@
 // =============== INCLUDES ================= //
 // ========================================== //
 
-#include "../ast/ast.h"
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
+#include "ast.h"
 
 // ========================================== //
 // ===== DECLARATION OF PUBLIC FUNCTIONS ==== //

@@ -17,7 +17,7 @@
 
 #include "generator.h"
 
-#include "../ast/ast.h"
+#include "ast.h"
 
 #include <stdio.h>
 #include <stdbool.h>
