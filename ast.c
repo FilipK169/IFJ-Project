@@ -15,7 +15,7 @@
 // =============== INCLUDES ================= //
 // ========================================== //
 
-#include "AST.h"
+#include "ast.h"
 
 #include <stdbool.h>
 #include <stdint.h>

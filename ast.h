@@ -56,7 +56,7 @@ typedef enum {
   TYPE_STRING,
   TYPE_BOOLEAN,
   TYPE_UNIT,
-  TYPE_ANY // ADDED FOR EXTENSION FUNCTIONS BY SEMANTICS
+  TYPE_ANY
 } ENUM_DATA_TYPE;
 
 
@@ -378,7 +378,7 @@ AST_PROGRAM *ast_program_create(void);
  * @param[in] function Function to add.
  * @return Function result.
  * @retval AST_OK.
- * @retval AST_INVALID_PAR.
+ * @retval AST_INVALID_PARAM.
  * @retval AST_INTERNAL_ERROR.
  */
 t_ast_result ast_program_add_function(AST_PROGRAM *program, AST_FUNCTION_DEF *function);
@@ -531,7 +531,7 @@ AST_STATEMENT *ast_statement_create_for(const char *var_name, bool is_exclusive,
  * @param[in,out] statement Node type of STMT_FOR.
  * @param[in] guard Bool expression.
  * @return Function result.
- * @retval AST_INVALID_PAR Node is not STMT_FOR.
+ * @retval AST_INVALID_PARAM Node is not STMT_FOR.
  */
 t_ast_result ast_statement_for_add_guard(AST_STATEMENT *statement, AST_EXPRESSION *guard);
 
@@ -621,7 +621,7 @@ AST_EXPRESSION *ast_expression_create_call(const char *name, AST_EXPRESSION *rec
  * @brief Adds empty args list "()" into Call.
  * @param[in,out] call Type of node EXPR_CALL.
  * @return Function result.
- * @retval AST_INVALID_PAR Node is not EXPR_CALL.
+ * @retval AST_INVALID_PARAM Node is not EXPR_CALL.
  */
 t_ast_result ast_expression_call_add_argument_list(AST_EXPRESSION *call);
 
@@ -638,7 +638,7 @@ t_ast_result ast_expression_call_add_argument(AST_EXPRESSION *call, AST_EXPRESSI
  * Typically calls semantics.
  * @param[in,out] expression Type of node EXPR_VAR_REF.
  * @return Function result.
- * @retval AST_INVALID_PAR Node is not EXPR_VAR_REF.
+ * @retval AST_INVALID_PARAM Node is not EXPR_VAR_REF.
  */
 t_ast_result ast_expression_var_ref_to_call(AST_EXPRESSION *expression);
 
