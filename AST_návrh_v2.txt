@@ -1,0 +1,285 @@
+// =================================== //
+// ============ STRUCTURE ============ //
+// =================================== //
+
+
+SOURCE_LOCATION                           // [NEW] pozice ve zdrojovém kódu; vyplňuje parser (z tokenu); předává se hodnotou
+├── size_t line                           // [NEW] 
+└── size_t column                         // [NEW]
+
+
+AST_PROGRAM
+├── AST_FUNCTION_DEF **functions
+├── size_t function_count
+└── size_t function_capacity                      
+    
+
+AST_FUNCTION_DEF
+├── char *name                           
+├── size_t function_id                    // doplní semantika
+├── bool is_main
+├── SOURCE_LOCATION location              // [NEW]
+├── AST_PARAM_LIST *param_lists           // [CHANGED]  bylo: AST_PARAMETER *parameters  [EXT:PARAMLISTS]
+├── size_t param_list_count               // [CHANGED]  bylo: parameter_count            [EXT:PARAMLISTS]   
+├── size_t param_list_capacity            // [CHANGED]  bylo: parameter_capacity         [EXT:PARAMLISTS]
+├── AST_PARAMETER *receiver               // [NEW][EXT:EXTKW] příjemce metody,  NULL = běžná funkce; codegen: příjemce je 1. parametr, pak argumenty seznam po seznamu
+├── ENUM_DATA_TYPE declared_return_type   // TYPE_UNSPECIFIED pokud není uveden
+├── ENUM_DATA_TYPE resolved_return_type   // doplní semantika
+└── AST_BLOCK *body
+
+
+AST_PARAM_LIST                            // [NEW][EXT:PARAMLISTS] jeden seznam parametrů v závorkách
+├── AST_PARAMETER *parameters             // [NEW]
+├── size_t parameter_count                // [NEW] 0 = prázdný seznam ()
+└── size_t parameter_capacity             // [NEW]
+
+
+AST_PARAMETER
+├── char *name
+├── size_t variable_id                    // doplní semantika
+├── SOURCE_LOCATION location              // [NEW]
+└── ENUM_DATA_TYPE type                   // u parametru je typ vždy explicitní
+
+
+
+AST_BLOCK
+├── AST_STATEMENT **statements
+├── size_t statement_count
+├── size_t statement_capacity
+└── ENUM_DATA_TYPE resolved_type          // [NEW][EXT:CONTROL] doplní semantika; typ výsledku bloku (poslední příkaz je výraz => jeho typ, jinak Unit)
+
+// =================================== //
+// ============ STATEMENT ============ //
+// =================================== //
+
+AST_STATEMENT
+├── ENUM_STATEMENT_TYPE type
+├── SOURCE_LOCATION location			   // line + column
+└── union data
+    ├── AST_VAR_DECL
+    ├── AST_ASSIGNMENT
+    ├── AST_RETURN
+    ├── AST_IF
+    ├── AST_WHILE
+    ├── AST_FOR                           // [NEW][EXT:CONTROL]
+    └── AST_EXPR_STMT
+    
+    // [REMOVED] AST_FUNCTION_CALL z unionu
+    //   důvod: volání je nyní výraz [ext:FUNEXP]; samostatné volání = EXPR_STMT s výrazem CALL
+
+AST_VAR_DECL
+├── char *name
+├── size_t variable_id                    // doplní semantika
+├── bool is_mutable                       // val=false, var=true
+├── ENUM_DATA_TYPE declared_type          // TYPE_UNSPECIFIED pokud není : Type
+├── ENUM_DATA_TYPE resolved_type          // doplní semantika
+└── AST_EXPRESSION *initializer           // povinný       [CHANGED][EXt:FUNEXP] bylo: AST_VALUE *initializer
+
+
+AST_ASSIGNMENT
+├── char *name
+├── size_t variable_id                    // doplní semantika
+└── AST_EXPRESSION *value                 // [CHANGED] bylo: AST_VALUE *value
+
+
+AST_RETURN
+└── AST_EXPRESSION *value                 // [CHANGED] bylo: AST_VALUE *value; NULL = samotné "return"
+
+
+AST_IF
+├── AST_EXPRESSION *condition
+├── AST_BLOCK *then_block
+├── AST_BLOCK *else_block
+└── ENUM_DATA_TYPE resolved_type         // [NEW][EXT:CONTROL] doplní semantika; typ výsledku if (potřeba když je if výraz) 
+
+
+AST_WHILE
+├── AST_EXPRESSION *condition
+└── AST_BLOCK *body
+
+
+AST_FOR                                   // [NEW][EXT:CONTROL]
+├── char *var_name                        // [NEW] řídicí proměnná
+├── size_t variable_id                    // [NEW] doplní semantika
+├── bool is_exclusive                     // [NEW] true = until, false = to
+├── AST_EXPRESSION *from                  // [NEW] 
+├── AST_EXPRESSION *to                    // [NEW] 
+├── AST_EXPRESSION *step                  // [NEW] NULL = krok 1; typ Int, nenulový
+├── AST_EXPRESSION **guards               // [NEW] 0..n stráží (if ...), každá typu Boolean
+├── size_t guard_count                    // [NEW]
+├── size_t guard_capacity                 // [NEW]
+└── AST_BLOCK *body 
+
+
+// [REMOVED] AST_FUNCTION_CALL (samostatná struktura: name, function_id, arguments, argument_count,
+//           argument_capacity, resolved_type, conversion)
+//   důvod: nahrazeno AST_CALL v sekci EXPRESSION (volání je výraz – FUNEXP);
+
+
+AST_EXPR_STMT
+└── AST_EXPRESSION *expression
+
+// =================================== //
+// ============== VALUE ============== //
+// =================================== //
+
+// [REMOVED] AST_VALUE (type + union { AST_EXPRESSION *expression; AST_FUNCTION_CALL *function_call; })
+//   důvod: FUNEXP dělá z volání běžný výraz
+//   Všude, kde bylo AST_VALUE *, je nyní AST_EXPRESSION *.
+
+
+
+
+// =================================== //
+// =========== EXPRESSION ============ //
+// =================================== //
+
+AST_EXPRESSION
+├── ENUM_EXPRESSION_TYPE type             // VAR_REF, INT_LITERAL, DOUBLE_LITERAL, STRING_LITERAL, UNIT_LITERAL,
+│                                         // UNARY, BINARY,
+│                                         // BOOL_LITERAL [NEW], CALL [NEW], MEMBER [NEW], INTERPOLATED [NEW], IF_EXPR [NEW]
+├── ENUM_DATA_TYPE resolved_type          // doplní semantika
+├── ENUM_CONVERSION conversion            // doplní semantika
+├── SOURCE_LOCATION location
+└── union data
+    ├── AST_VAR_REF
+    ├── AST_INT_LITERAL
+    ├── AST_DOUBLE_LITERAL
+    ├── AST_STRING_LITERAL
+    ├── AST_UNIT_LITERAL
+    ├── AST_UNARY_EXPRESSION
+    ├── AST_BINARY_EXPRESSION
+    ├── AST_BOOL_LITERAL                  // [NEW][EXT:BOOLTHEN]
+    ├── AST_CALL                          // [NEW][EXT:FUNEXP, EXTKW, PARAMLISTS]
+    ├── AST_MEMBER                        // [NEW][EXT:VALMEM, EXTKW]
+    ├── AST_INTERPOLATED                  // [NEW][EXT:INTERPOLATEDS]
+    └── AST_IF if_expr                    // [NEW][EXT:CONTROL] if použitý jako výraz
+
+
+
+AST_VAR_REF
+├── char *name
+└── size_t variable_id                    // doplní semantika
+
+
+AST_INT_LITERAL
+└── int64_t value
+
+
+AST_DOUBLE_LITERAL
+└── double value
+
+
+AST_STRING_LITERAL
+├── char *value
+└── size_t length
+
+
+AST_UNIT_LITERAL
+└── NULL                                  // samotný typ uzlu říká vše
+
+
+AST_BOOL_LITERAL                          // [NEW][EXT:BOOLTHEN] true / false
+└── bool value                            // [NEW]
+
+
+AST_UNARY_EXPRESSION
+├── ENUM_UNARY_OPERATOR operator          // [NEW][EXT:BOOLTHEN] přibyl NOT (!); operand NOT musí být Boolean
+└── AST_EXPRESSION *operand
+
+
+AST_BINARY_EXPRESSION
+├── ENUM_BINARY_OPERATOR operator         // [NEW][EXT:BOOLTHEN] přibyly AND (&&) a OR (||): zkratové vyhodnocení zleva, operandy musí být Boolean; == a != fungují i na Boolean
+├── AST_EXPRESSION *left
+└── AST_EXPRESSION *right
+
+
+AST_CALL                                  // [NEW][EXT:FUNEXP] nahrazuje AST_FUNCTION_CALL; volání vestavěné i uživatelské funkce
+├── ENUM_CALLEE_KIND callee_kind          // [NEW] USER_FUNCTION | BUILTIN | EXTENSION [EXT:EXTKW]; doplní semantika
+├── char *name                            // [NEW]
+├── AST_EXPRESSION *receiver              // [NEW][EXT:EXTKW] x.plus(1) => x; jinak NULL
+├── AST_ARG_LIST *argument_lists          // [NEW][EXT:PARAMLISTS] 
+├── size_t argument_list_count            // [NEW] základ: vždy 1; 0 = volání bez závorek (funkce bez seznamu parametrů);
+├── size_t argument_list_capacity         // [NEW]
+└── size_t function_id                    // [NEW] doplní semantika; pro BUILTIN = id vestavěné funkce
+// [NEW][EXT:EXTKW] metoda bez seznamu "x.twice" => MEMBER (ne CALL); metoda s prázdným seznamem "x.foo()" => CALL, argument_list_count == 1
+// [NEW][EXT:EXTKW] chybné zápisy hlídá sémantika: "x.foo" u metody definované s () a "x.twice()" u metody bez seznamu
+
+
+AST_ARG_LIST                              // [NEW][EXT:PARAMLISTS] jeden seznam argumentů v závorkách
+├── AST_EXPRESSION **arguments            // [NEW]
+├── size_t argument_count                 // [NEW] 0 = prázdný seznam ()
+└── size_t argument_capacity              // [NEW]
+
+
+AST_MEMBER                                // [NEW][EXT:VALMEM, EXTKW] zápis výraz.id BEZ závorek
+├── AST_EXPRESSION *receiver              // [NEW] smí být zase MEMBER / CALL => řetězení number.floor.toInt
+├── char *member_name                     // [NEW]
+├── ENUM_MEMBER_KIND member_kind          // [NEW] doplní semantika:
+│                                         //   TO_STRING (libovolná hodnota -> String)   [EXT:VALMEM]
+│                                         //   TO_INT    (Double -> Int)                 [EXT:VALMEM]
+│                                         //   FLOOR     (Double -> Double)              [EXT:VALMEM]
+│                                         //   LENGTH    (String -> Int)                 [EXT:VALMEM]
+│                                         //   EXT_PROPERTY (bezparametrická metoda)     [EXT:EXTKW]
+└── size_t function_id                    // [NEW] doplní semantika
+
+// [NEW] parser vždy vytvoří MEMBER; sémantika podle typu příjemce rozhodne, zda jde o vestavěný člen
+//       [EXT:VALMEM] nebo rozšiřující bezparametrickou metodu (EXTKW). Jiný člen => chyba.
+
+
+AST_INTERPOLATED                          // [NEW][EXT:INTERPOLATEDS] s"..." (i víceřádkový s""" ... """)
+├── AST_INTERP_PART *parts                // [NEW] části se spojují zleva doprava
+├── size_t part_count                     // [NEW]
+└── size_t part_capacity    
+
+
+AST_INTERP_PART                           // [NEW][EXT:INTERPOLATEDS]
+├── bool is_literal                       // [NEW]
+├── char *text                            // [NEW] pro is_literal; již dekódováno ($$ => $, \" => ")
+└── AST_EXPRESSION *expression            // [NEW] $id (VAR_REF) nebo ${výraz}; hodnota se převádí jako toStr
+
+
+
+
+PROGRAM
+└── FUNCTION[]
+    ├── PARAM_LIST[]                      // [CHANGED] bylo: PARAMETER[]
+    │   └── PARAMETER[]                   // [NEW] (zanořeno pod PARAM_LIST)
+    ├── receiver (volitelně)              // [NEW][EXT:EXTKW] PARAMETER
+    └── BLOCK
+        └── STATEMENT[]
+            ├── VAR_DECL
+            │   └── EXPRESSION            // [CHANGED] bylo: VALUE (EXPRESSION | FUNCTION_CALL)
+            │
+            ├── ASSIGNMENT
+            │   └── EXPRESSION            // [CHANGED] bylo: VALUE
+            │
+            ├── RETURN
+            │   └── EXPRESSION / NULL     // [CHANGED] bylo: VALUE / NULL
+            │
+            ├── IF
+            │   ├── EXPRESSION condition
+            │   ├── BLOCK
+            │   └── BLOCK / NULL          // [CHANGED] NULL = zkrácený if [EXT:BOOLTHEN]; else if = BLOCK s jedním IF
+            │
+            ├── WHILE
+            │   ├── EXPRESSION condition
+            │   └── BLOCK
+            │
+            ├── FOR                       // [NEW][EXT:CONTROL]
+            │   ├── EXPRESSION from, to, step 
+            │   ├── EXPRESSION[] guards
+            │   └── BLOCK
+            |       
+            └── EXPR_STMT
+                └── EXPRESSION
+                    ├── VAR_REF           // [CHANGED] může být přepsán na CALL (funkce bez seznamu parametrů) [EXT:PARAMLISTS]
+                    ├── literals          // [CHANGED] + BOOL_LITERAL [EXT:BOOLTHEN]
+                    ├── UNARY / BINARY    // [CHANGED] + NOT, AND, OR [EXT:BOOLTHEN]
+                    ├── CALL              // [NEW][EXT:FUNEXP]
+                    │   └── ARG_LIST[]    // [NEW][EXT:PARAMLISTS]
+                    │       └── EXPRESSION[]   // [NEW]
+                    ├── MEMBER            // [NEW][EXT:VALMEM, EXTKW]
+                    ├── INTERPOLATED      // [NEW][EXT:INTERPOLATEDS]
+                    │   └── INTERP_PART[] // [NEW]
+                    └── IF_EXPR           // [NEW][EXT:CONTROL]    
