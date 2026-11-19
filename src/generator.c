@@ -670,7 +670,7 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
     buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.double_literal);
 
   } else if (var_decl->initializer->type == EXPR_INT_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%zu\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.int_literal);
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, var_decl->name, local_mangling, (long long)var_decl->initializer->data.int_literal);
 
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(var_decl->initializer->data.string_literal.value, var_decl->initializer->data.string_literal.length);
@@ -752,7 +752,7 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
     buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.double_literal);
 
   } else if (assignment->value->type == EXPR_INT_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%zu\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.int_literal);
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, (long long)assignment->value->data.int_literal);
 
   } else if (assignment->value->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(assignment->value->data.string_literal.value, assignment->value->data.string_literal.length);
@@ -848,7 +848,7 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
     buffer_printf(&func_globals->function_body, "PUSHS float@%a\n", expression->data.double_literal);
 
   } else if (expression->type == EXPR_INT_LITERAL) {
-    buffer_printf(&func_globals->function_body, "PUSHS int@%zu\n", expression->data.int_literal);
+    buffer_printf(&func_globals->function_body, "PUSHS int@%lld\n", (long long)expression->data.int_literal);
 
   } else if (expression->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(expression->data.string_literal.value, expression->data.string_literal.length);
@@ -1418,7 +1418,7 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, var_lis
 
   for (size_t i = 0; i < call->argument_list_count; i++) {
     AST_ARG_LIST *arg_list = &call->argument_lists[i];
-    for (size_t j = 0; i < arg_list->argument_count; j++) {
+    for (size_t j = 0; j < arg_list->argument_count; j++) {
       AST_EXPRESSION *arg = arg_list->arguments[j];
       if (generate_expression(arg, func_globals, var_list, builtins) != 0) {
         return 1;
@@ -1773,7 +1773,8 @@ static char* convert_string(const char *string, size_t length) {
   if (string == NULL || length > (SIZE_MAX - 1) / 4) {
     return NULL;
   }
-  char *converted = malloc(length * 4 + 1);
+  size_t capacity = length == 0 ? 5 : length * 4 + 1;
+  char *converted = malloc(capacity);
   if (converted == NULL) {
     return NULL;
   }
@@ -1806,7 +1807,7 @@ static int builtin_print() {
   printf("DEFVAR LF@output\n");
   printf("POPS LF@output\n");
 
-  printf("JUMPIFNEQ !print$not$unit LF@ nil@nil\n");
+  printf("JUMPIFNEQ !print$not$unit LF@output nil@nil\n");
   printf("MOVE LF@output string@()\n");
 
   printf("LABEL !print$not$unit\n");
@@ -2042,7 +2043,7 @@ int generate_code(AST_PROGRAM *program) {
   }
 
   printf(".IFJcode26\n\n");
-  printf("JUMP main\n\n");
+  printf("JUMP $main\n\n");
 
   builtins_checklist *builtins = malloc(sizeof(builtins_checklist));
   if (builtins == NULL) {
