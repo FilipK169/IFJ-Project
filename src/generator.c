@@ -315,9 +315,9 @@ static int builtin_ord();
  * @param[in] name Name of the variable.
  *
  * @return Mangling of found variable.
- * @retval -1 - variable not found.
+ * @retval SIZE_MAX - variable not found.
  */
-size_t find_variable(var_list_node *var_list, const char *name);
+static size_t find_variable(var_list_node *var_list, const char *name);
 
 /**
  * @brief Converts a string into IFJcode26 string format.
@@ -545,6 +545,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
     if (i == function->body->statement_count - 1) {
       is_last = true;
     }
+    buffer_printf(&func_globals->function_body, "CLEARS\n");
     if (generate_statement(statement, func_globals, &var_list, builtins) != 0) {
       while (var_list != NULL) {
         var_list_node *var_node_delete = var_list;
@@ -556,6 +557,10 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       free(func_globals->function_name);
       free(func_globals);
       return 1;
+    }
+    if (is_last && function->declared_return_type == TYPE_UNIT) {
+      buffer_printf(&func_globals->function_body, "CLEARS\n");
+      buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
     }
     if (is_last && statement->type != STMT_RETURN) {
       if (func_globals->is_main) {
@@ -670,6 +675,10 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
     buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, var_decl->name, local_mangling, var_decl->initializer->data.double_literal);
 
   } else if (var_decl->initializer->type == EXPR_INT_LITERAL) {
+    if (var_decl->initializer->conversion == CONVERSION_INT_TO_DOUBLE) {
+      buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, var_decl->name, local_mangling, (double)var_decl->initializer->data.int_literal);
+      return 0;
+    }
     buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, var_decl->name, local_mangling, (long long)var_decl->initializer->data.int_literal);
 
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
@@ -746,24 +755,28 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
     buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu %s%s$%zu\n", func_globals->var_prefix, assignment->name, local_mangling, func_globals->var_prefix, assignment->value->data.var_ref.name, mangling);
 
   } else if (assignment->value->type == EXPR_BOOL_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu bool@%s\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.bool_literal ? "true" : "false");
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu bool@%s\n", func_globals->var_prefix, assignment->name, local_mangling, assignment->value->data.bool_literal ? "true" : "false");
 
   } else if (assignment->value->type == EXPR_DOUBLE_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, assignment->value->data.double_literal);
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, assignment->name, local_mangling, assignment->value->data.double_literal);
 
   } else if (assignment->value->type == EXPR_INT_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, (long long)assignment->value->data.int_literal);
+    if (assignment->value->conversion == CONVERSION_INT_TO_DOUBLE) {
+      buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, assignment->name, local_mangling, (double)assignment->value->data.int_literal);
+      return 0;
+    }
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, assignment->name, local_mangling, (long long)assignment->value->data.int_literal);
 
   } else if (assignment->value->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(assignment->value->data.string_literal.value, assignment->value->data.string_literal.length);
     if (string == NULL) {
       return 1;
     }
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu string@%s\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling, string);
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu string@%s\n", func_globals->var_prefix, assignment->name, local_mangling, string);
     free(string);
 
   } else if (assignment->value->type == EXPR_UNIT_LITERAL) {
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu nil@nil\n", func_globals->var_prefix, assignment->name, func_globals->var_mangling);
+    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu nil@nil\n", func_globals->var_prefix, assignment->name, local_mangling);
 
   } else if (assignment->value->type == EXPR_UNARY) {
     if (generate_unary_expr(&assignment->value->data.unary, func_globals, var_list, builtins) != 0) {
@@ -975,11 +988,11 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
       if (generate_expression(binary_expr->left, func_globals, var_list, builtins) != 0) {
         return 1;
       }
-      buffer_printf(&func_globals->function_body, "POPS %s$str1\n", func_globals->var_prefix);
       if (generate_expression(binary_expr->right, func_globals, var_list, builtins) != 0) {
         return 1;
       }
       buffer_printf(&func_globals->function_body, "POPS %s$str2\n", func_globals->var_prefix);
+      buffer_printf(&func_globals->function_body, "POPS %s$str1\n", func_globals->var_prefix);
       buffer_printf(&func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", func_globals->var_prefix, func_globals->var_prefix, func_globals->var_prefix);
       buffer_printf(&func_globals->function_body, "PUSHS %s$concatstr\n", func_globals->var_prefix);
       if (func_globals->was_concat == false) {
@@ -1423,6 +1436,9 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, var_lis
       if (generate_expression(arg, func_globals, var_list, builtins) != 0) {
         return 1;
       }
+      if (arg->conversion == CONVERSION_INT_TO_DOUBLE) {
+        buffer_printf(&func_globals->function_body, "INT2FLOATS\n");
+      }
     }
   }
   
@@ -1536,7 +1552,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
     }
     buffer_printf(&func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", func_globals->var_prefix, func_globals->var_prefix, func_globals->var_prefix);
     if (i < interpolated->part_count - 1) {
-      buffer_printf(&func_globals->function_body, "MOV %s$str1 %s$concatstr\n", func_globals->var_prefix, func_globals->var_prefix);
+      buffer_printf(&func_globals->function_body, "MOVE %s$str1 %s$concatstr\n", func_globals->var_prefix, func_globals->var_prefix);
     }
   }
 
@@ -1561,6 +1577,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
 
   size_t prev_mangling = func_globals->var_mangling;
   func_globals->if_counter++;
+  size_t local_if = func_globals->if_counter;
 
   if (generate_expression(if_stmt->condition, func_globals, var_list, builtins) != 0) {
     return 1;
@@ -1568,7 +1585,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
 
   buffer_printf(&func_globals->function_body, "PUSHS bool@true\n");
   if (if_stmt->else_block == NULL) {
-    buffer_printf(&func_globals->function_body, "JUMPIFNEQS %s$if$%zu$end\n", func_globals->function_name, func_globals->if_counter);
+    buffer_printf(&func_globals->function_body, "JUMPIFNEQS %s$if$%zu$end\n", func_globals->function_name, local_if);
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
@@ -1581,7 +1598,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       }
     }
   } else {
-    buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$if$%zu\n", func_globals->function_name, func_globals->if_counter);
+    buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$if$%zu\n", func_globals->function_name, local_if);
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->else_block->statement_count; i++) {
@@ -1593,8 +1610,8 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
         return 1;
       }
     }
-    buffer_printf(&func_globals->function_body, "JUMP %s$if$%zu$end\n", func_globals->function_name, func_globals->if_counter);
-    buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu\n", func_globals->function_name, func_globals->if_counter);
+    buffer_printf(&func_globals->function_body, "JUMP %s$if$%zu$end\n", func_globals->function_name, local_if);
+    buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu\n", func_globals->function_name, local_if);
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
     for (size_t i = 0; i < if_stmt->then_block->statement_count; i++) {
@@ -1607,7 +1624,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       }
     }
   }
-  buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu$end\n", func_globals->function_name, func_globals->if_counter);
+  buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu$end\n", func_globals->function_name, local_if);
 
   func_globals->var_mangling = prev_mangling;
 
@@ -1627,14 +1644,15 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
   
   size_t prev_mangling = func_globals->var_mangling;
   func_globals->while_counter++;
+  size_t local_while = func_globals->while_counter;
 
-  buffer_printf(&func_globals->function_body, "LABEL %s$while$%zu$loop\n", func_globals->function_name, func_globals->while_counter);
+  buffer_printf(&func_globals->function_body, "LABEL %s$while$%zu$loop\n", func_globals->function_name, local_while);
   if (generate_expression(while_stmt->condition, func_globals, var_list, builtins) != 0) {
     return 1;
   }
 
   buffer_printf(&func_globals->function_body, "PUSHS bool@true\n");
-  buffer_printf(&func_globals->function_body, "JUMPIFNEQS %s$while$%zu$end\n", func_globals->function_name, func_globals->while_counter);
+  buffer_printf(&func_globals->function_body, "JUMPIFNEQS %s$while$%zu$end\n", func_globals->function_name, local_while);
   func_globals->var_mangling_counter++;
   func_globals->var_mangling = func_globals->var_mangling_counter;
   for (size_t i = 0; i < while_stmt->body->statement_count; i++) {
@@ -1646,8 +1664,8 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
       return 1;
     }
   }
-  buffer_printf(&func_globals->function_body, "JUMP %s$while$%zu$loop\n", func_globals->function_name, func_globals->while_counter);
-  buffer_printf(&func_globals->function_body, "LABEL %s$while$%zu$end\n", func_globals->function_name, func_globals->while_counter);
+  buffer_printf(&func_globals->function_body, "JUMP %s$while$%zu$loop\n", func_globals->function_name, local_while);
+  buffer_printf(&func_globals->function_body, "LABEL %s$while$%zu$end\n", func_globals->function_name, local_while);
 
   func_globals->var_mangling = prev_mangling;
 
@@ -1665,7 +1683,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     return 1;
   }
 
-  if (func_globals->for_counter > 0) {
+  if (func_globals->for_counter == 0) {
     buffer_printf(&func_globals->function_head, "DEFVAR %s$for$to\n", func_globals->var_prefix);
     buffer_printf(&func_globals->function_head, "DEFVAR %s$for$step\n", func_globals->var_prefix);
     buffer_printf(&func_globals->function_head, "DEFVAR %s$for$check\n", func_globals->var_prefix);
@@ -1675,6 +1693,8 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
   func_globals->for_counter++;
   func_globals->var_mangling_counter++;
   func_globals->var_mangling = func_globals->var_mangling_counter;
+
+  buffer_printf(&func_globals->function_body, "DEFVAR %s%s$%zu\n", func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling);
 
   var_list_node *var_node_new = malloc(sizeof(var_list_node));
   if (var_node_new == NULL) {
@@ -1728,6 +1748,9 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$for$%zu$end\n", func_globals->function_name, func_globals->for_counter);
   }
 
+  size_t pre_body_mangling = func_globals->var_mangling;
+  func_globals->var_mangling_counter++;
+  func_globals->var_mangling = func_globals->var_mangling_counter;
   for (size_t i = 0; i < for_stmt->body->statement_count; i++) {
     AST_STATEMENT *statement = for_stmt->body->statements[i];
     if (statement == NULL) {
@@ -1738,6 +1761,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     }
   }
 
+  func_globals->var_mangling = pre_body_mangling;
   buffer_printf(&func_globals->function_body, "ADD %s%s$%zu %s%s$%zu %s$for$step\n", func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix);
   buffer_printf(&func_globals->function_body, "JUMP %s$for$%zu$loop\n", func_globals->function_name, func_globals->for_counter);
 
@@ -1758,7 +1782,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
   return 0;
 }
 
-size_t find_variable(var_list_node *var_list, const char *name) {
+static size_t find_variable(var_list_node *var_list, const char *name) {
   var_list_node *var_node = var_list;
   while (var_node != NULL) {
     if (strcmp(name, var_node->name) == 0) {
@@ -1780,8 +1804,13 @@ static char* convert_string(const char *string, size_t length) {
   }
   size_t conv_len = 0;
   if (length == 0) {
-    memcpy(converted, "\\000", 4);
-    conv_len = 4;
+    if (string[0] == '\0') {
+      memcpy(converted, "\\000", 4);
+      conv_len = 4;
+    } else {
+      memcpy(converted, "", 0);
+      conv_len = 0;
+    }
   }
 
   for (size_t i = 0; i < length; i++) {
@@ -1900,23 +1929,23 @@ static int builtin_toStr() {
 
   printf("LABEL !toStr$int\n");
   printf("INT2STR LF@str LF@val\n");
-  printf("LABEL !toStr$end\n");
+  printf("JUMP !toStr$end\n");
 
   printf("LABEL !toStr$float\n");
   printf("FLOAT2STR LF@str LF@val\n");
-  printf("LABEL !toStr$end\n");
+  printf("JUMP !toStr$end\n");
 
   printf("LABEL !toStr$bool\n");
   printf("JUMPIFEQ !toStr$bool$true LF@val bool@true\n");
   printf("MOVE LF@str string@false\n");
-  printf("LABEL !toStr$end\n");
+  printf("JUMP !toStr$end\n");
   printf("LABEL !toStr$bool$true\n");
   printf("MOVE LF@str string@true\n");
-  printf("LABEL !toStr$end\n");
+  printf("JUMP !toStr$end\n");
 
   printf("LABEL !toStr$nil\n");
   printf("MOVE LF@str string@()\n");
-  printf("LABEL !toStr$end\n");
+  printf("JUMP !toStr$end\n");
 
   printf("LABEL !toStr$end\n");
   printf("PUSHS LF@str\n");
@@ -1964,23 +1993,23 @@ static int builtin_subStr() {
   printf("MOVE LF@index int@0\n");
 
   printf("LT LF@check LF@start int@0\n");
-  printf("JUMPIFEQ !subStr$error LT@check bool@true\n");
+  printf("JUMPIFEQ !subStr$error LF@check bool@true\n");
   printf("LT LF@check LF@end int@0\n");
-  printf("JUMPIFEQ !subStr$error LT@check bool@true\n");
+  printf("JUMPIFEQ !subStr$error LF@check bool@true\n");
   printf("GT LF@check LF@start LF@end\n");
-  printf("JUMPIFEQ !subStr$error LT@check bool@true\n");
+  printf("JUMPIFEQ !subStr$error LF@check bool@true\n");
   printf("STRLEN LF@len LF@val\n");
   printf("LT LF@check LF@start LF@len\n");
   printf("PUSHS LF@check\n");
   printf("NOTS\n");
   printf("POPS LF@check\n");
-  printf("JUMPIFEQ !subStr$error LT@check bool@true\n");
+  printf("JUMPIFEQ !subStr$error LF@check bool@true\n");
   printf("GT LF@check LF@end LF@len\n");
-  printf("JUMPIFEQ !subStr$error LT@check bool@true\n");
+  printf("JUMPIFEQ !subStr$error LF@check bool@true\n");
 
   printf("LABEL !subStr$loop\n");
   printf("LT LF@check LF@start LF@end\n");
-  printf("JUMPIFEQ !subStr$end LT@check bool@false\n");
+  printf("JUMPIFEQ !subStr$end LF@check bool@false\n");
   printf("GETCHAR LF@char LF@val LF@start\n");
   printf("SETCHAR LF@str LF@index LF@char\n");
   printf("ADD LF@start LF@start int@1\n");
@@ -2013,10 +2042,10 @@ static int builtin_ord() {
   printf("JUMPIFEQ !ord$error LF@len int@0\n");
   
   printf("LT LF@check LF@index LF@len\n");
-  printf("JUMPIFEQ !ord$error LT@check bool@false\n");
+  printf("JUMPIFEQ !ord$error LF@check bool@false\n");
 
   printf("LT LF@check LF@index int@0\n");
-  printf("JUMPIFEQ !ord$error LT@check bool@true\n");
+  printf("JUMPIFEQ !ord$error LF@check bool@true\n");
 
   printf("STRI2INT LF@code LF@str LF@index\n");
   printf("JUMP !ord$end\n");
@@ -2062,60 +2091,72 @@ int generate_code(AST_PROGRAM *program) {
   for (size_t i = 0; i < program->function_count; i++) {
     AST_FUNCTION_DEF *function = program->functions[i];
     if (function == NULL) {
+      free(builtins);
       return 1;
     }
     if (generate_function(function, builtins) != 0) {
+      free(builtins);
       return 1;
     }
+    printf("\n");
   }
 
   printf("\n");
 
   if (builtins->print) {
     if (builtin_print() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->readLine) {
     if (builtin_readLine() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->readInt) {
     if (builtin_readInt() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->readDouble) {
     if (builtin_readDouble() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->readBoolean) {
     if (builtin_readBoolean() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->toStr) {
     if (builtin_toStr() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->strLength) {
     if (builtin_strLength() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->subStr) {
     if (builtin_subStr() != 0) {
+      free(builtins);
       return 1;
     }
   }
   if (builtins->ord) {
     if (builtin_ord() != 0) {
+      free(builtins);
       return 1;
     }
   }
-
+  free(builtins);
   return 0;
 }
