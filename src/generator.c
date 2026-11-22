@@ -51,6 +51,9 @@ typedef struct {
   size_t while_counter; // Counter of while cycles in a function.
   size_t for_counter; // Counter of for cycles in a function.
   bool was_concat; // Check for generating helper variables for concatenation.
+  bool returns_unit; // Check if function returns unit type.
+  size_t and_counter; // Counter of and expressions in a function.
+  size_t or_counter; // Counter of or expressions in a function.
 } function_globals;
 
 /** @brief Checklist of used built-in functions.*/
@@ -418,6 +421,11 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
   func_globals->function_head = (code_buffer){0};
   func_globals->function_body = (code_buffer){0};
   func_globals->function_name = NULL;
+  if (function->is_main || function->declared_return_type == TYPE_UNIT) {
+    func_globals->returns_unit = true;
+  } else {
+    func_globals->returns_unit = false;
+  }
 
   const char *base_function_name = function->is_main ? "$main" : function->name;
   bool has_receiver = !function->is_main && function->receiver != NULL;
@@ -545,7 +553,6 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
     if (i == function->body->statement_count - 1) {
       is_last = true;
     }
-    buffer_printf(&func_globals->function_body, "CLEARS\n");
     if (generate_statement(statement, func_globals, &var_list, builtins) != 0) {
       while (var_list != NULL) {
         var_list_node *var_node_delete = var_list;
@@ -558,8 +565,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       free(func_globals);
       return 1;
     }
-    if (is_last && function->declared_return_type == TYPE_UNIT) {
-      buffer_printf(&func_globals->function_body, "CLEARS\n");
+    if (is_last && func_globals->returns_unit && statement->type != STMT_RETURN) {
       buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
     }
     if (is_last && statement->type != STMT_RETURN) {
@@ -650,15 +656,6 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
     return 1;
   }
 
-  var_list_node *var_node_new = malloc(sizeof(var_list_node));
-  if (var_node_new == NULL) {
-    return 1;
-  }
-  var_node_new->mangling = func_globals->var_mangling;
-  var_node_new->name = var_decl->name;
-  var_node_new->next = *var_list;
-  *var_list = var_node_new;
-
   size_t local_mangling = func_globals->var_mangling;
 
   if (var_decl->initializer->type == EXPR_VAR_REF) {
@@ -677,10 +674,9 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
   } else if (var_decl->initializer->type == EXPR_INT_LITERAL) {
     if (var_decl->initializer->conversion == CONVERSION_INT_TO_DOUBLE) {
       buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu float@%a\n", func_globals->var_prefix, var_decl->name, local_mangling, (double)var_decl->initializer->data.int_literal);
-      return 0;
+    } else {
+      buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, var_decl->name, local_mangling, (long long)var_decl->initializer->data.int_literal);
     }
-    buffer_printf(&func_globals->function_body, "MOVE %s%s$%zu int@%lld\n", func_globals->var_prefix, var_decl->name, local_mangling, (long long)var_decl->initializer->data.int_literal);
-
   } else if (var_decl->initializer->type == EXPR_STRING_LITERAL) {
     char *string = convert_string(var_decl->initializer->data.string_literal.value, var_decl->initializer->data.string_literal.length);
     if (string == NULL) {
@@ -733,6 +729,14 @@ static int generate_var_decl(AST_VAR_DECL *var_decl, function_globals *func_glob
   }
 
   buffer_printf(&func_globals->function_head, "DEFVAR %s%s$%zu\n", func_globals->var_prefix, var_decl->name, local_mangling);
+  var_list_node *var_node_new = malloc(sizeof(var_list_node));
+  if (var_node_new == NULL) {
+    return 1;
+  }
+  var_node_new->mangling = local_mangling;
+  var_node_new->name = var_decl->name;
+  var_node_new->next = *var_list;
+  *var_list = var_node_new;
 
   return 0;
 }
@@ -830,6 +834,13 @@ static int generate_return(AST_RETURN *return_stmt, function_globals *func_globa
     if (generate_expression(return_stmt->value, func_globals, var_list, builtins) != 0) {
       return 1;
     }
+    if (return_stmt->value->conversion == CONVERSION_INT_TO_DOUBLE) {
+      buffer_printf(&func_globals->function_body, "INT2FLOATS\n");
+    }
+  }
+
+  if (func_globals->returns_unit && return_stmt->value == NULL) {
+    buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
   }
 
   if (func_globals->is_main) {
@@ -1390,10 +1401,16 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
       if (generate_expression(binary_expr->left, func_globals, var_list, builtins) != 0) {
         return 1;
       }
+      buffer_printf(&func_globals->function_body, "PUSHS bool@false\n");
+      buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$and$%zu$false\n", func_globals->function_name, func_globals->and_counter);
       if (generate_expression(binary_expr->right, func_globals, var_list, builtins) != 0) {
         return 1;
       }
-      buffer_printf(&func_globals->function_body, "ANDS\n");
+      buffer_printf(&func_globals->function_body, "JUMP %s$and$%zu$end\n", func_globals->function_name, func_globals->and_counter);
+      buffer_printf(&func_globals->function_body, "LABEL %s$and$%zu$false\n", func_globals->function_name, func_globals->and_counter);
+      buffer_printf(&func_globals->function_body, "PUSHS bool@false\n");
+      buffer_printf(&func_globals->function_body, "LABEL %s$and$%zu$end\n", func_globals->function_name, func_globals->and_counter);
+      func_globals->and_counter++;
     } else {
       return 1;
     }
@@ -1403,10 +1420,16 @@ static int generate_binary_expr(AST_BINARY_EXPRESSION *binary_expr, function_glo
       if (generate_expression(binary_expr->left, func_globals, var_list, builtins) != 0) {
         return 1;
       }
+      buffer_printf(&func_globals->function_body, "PUSHS bool@true\n");
+      buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$or$%zu$true\n", func_globals->function_name, func_globals->or_counter);
       if (generate_expression(binary_expr->right, func_globals, var_list, builtins) != 0) {
         return 1;
       }
-      buffer_printf(&func_globals->function_body, "ORS\n");
+      buffer_printf(&func_globals->function_body, "JUMP %s$or$%zu$end\n", func_globals->function_name, func_globals->or_counter);
+      buffer_printf(&func_globals->function_body, "LABEL %s$or$%zu$true\n", func_globals->function_name, func_globals->or_counter);
+      buffer_printf(&func_globals->function_body, "PUSHS bool@true\n");
+      buffer_printf(&func_globals->function_body, "LABEL %s$or$%zu$end\n", func_globals->function_name, func_globals->or_counter);
+      func_globals->or_counter++;
     } else {
       return 1;
     }
@@ -1805,9 +1828,6 @@ static char* convert_string(const char *string, size_t length) {
   size_t conv_len = 0;
   if (length == 0) {
     if (string[0] == '\0') {
-      memcpy(converted, "\\000", 4);
-      conv_len = 4;
-    } else {
       memcpy(converted, "", 0);
       conv_len = 0;
     }
@@ -1842,6 +1862,7 @@ static int builtin_print() {
   printf("LABEL !print$not$unit\n");
   printf("WRITE LF@output\n");
 
+  printf("PUSH nil@nil\n");
   printf("POPFRAME\n");
   printf("RETURN\n");
   printf("\n");
@@ -1988,6 +2009,7 @@ static int builtin_subStr() {
   printf("DEFVAR LF@check\n");
   printf("DEFVAR LF@len\n");
   printf("DEFVAR LF@str\n");
+  printf("MOVE LF@str string@\n");
   printf("DEFVAR LF@char\n");
   printf("DEFVAR LF@index\n");
   printf("MOVE LF@index int@0\n");
@@ -2011,7 +2033,7 @@ static int builtin_subStr() {
   printf("LT LF@check LF@start LF@end\n");
   printf("JUMPIFEQ !subStr$end LF@check bool@false\n");
   printf("GETCHAR LF@char LF@val LF@start\n");
-  printf("SETCHAR LF@str LF@index LF@char\n");
+  printf("CONCAT LF@str LF@str LF@char\n");
   printf("ADD LF@start LF@start int@1\n");
   printf("ADD LF@index LF@index int@1\n");
   printf("JUMP !subStr$loop\n");
@@ -2019,6 +2041,7 @@ static int builtin_subStr() {
   printf("LABEL !subStr$error\n");
   printf("EXIT int@40\n");
   printf("LABEL !subStr$end\n");
+  printf("PUSHS LF@str\n");
   printf("POPFRAME\n");
   printf("RETURN\n");
   printf("\n");
