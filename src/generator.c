@@ -221,10 +221,11 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
  * @param[in,out] func_globals Structure for function name, files, checks and counters.
  * @param[in,out] var_list List of currently declared variables.
  * @param[in,out] builtins Checklist of used built-in functions.
+ * @param[in] if_expr Is the if statement an expression.
  * 
  * @return 0 on success, 1 on error.
  */
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins);
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool if_expr);
 
 /**
  * @brief Generates code for while cycles.
@@ -639,7 +640,7 @@ static int generate_statement(AST_STATEMENT *statement, function_globals *func_g
       return 1;
     }
   } else if (statement->type == STMT_IF) {
-    if (generate_if(&statement->data.if_stmt, func_globals, var_list, builtins) != 0) {
+    if (generate_if(&statement->data.if_stmt, func_globals, var_list, builtins, false) != 0) {
       return 1;
     }
   } else if (statement->type == STMT_WHILE) {
@@ -786,7 +787,7 @@ static int generate_expression(AST_EXPRESSION *expression, function_globals *fun
     }
 
   } else if (expression->type == EXPR_IF) {
-    if (generate_if(&expression->data.if_expr, func_globals, var_list, builtins) != 0) {
+    if (generate_if(&expression->data.if_expr, func_globals, var_list, builtins, true) != 0) {
       return 1;
     }
 
@@ -1250,7 +1251,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
   return 0;
 }
 
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins) {
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool if_expr) {
   if (if_stmt == NULL) {
     return 1;
   }
@@ -1290,6 +1291,12 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
         return 1;
       }
     }
+    while (*var_list != NULL && (*var_list)->mangling > prev_mangling) {
+      var_list_node *var_node_delete = *var_list;
+      *var_list = (*var_list)->next;
+      free(var_node_delete);
+    }
+
     buffer_printf(&func_globals->function_body, "JUMP %s$if$%zu$end\n", func_globals->function_name, local_if);
     buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu\n", func_globals->function_name, local_if);
     func_globals->var_mangling_counter++;
@@ -1305,6 +1312,9 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
     }
   }
   buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu$end\n", func_globals->function_name, local_if);
+  if (!if_expr) {
+    buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
+  }
 
   func_globals->var_mangling = prev_mangling;
 
