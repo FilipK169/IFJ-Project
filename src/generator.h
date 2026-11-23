@@ -11,8 +11,8 @@
  * @author Filip Kachyňa (xkachyf00)
  */
 
-#ifndef GENERATOR_H // UPRAV FILENAME
-#define GENERATOR_H // UPRAV FILENAME
+#ifndef GENERATOR_H
+#define GENERATOR_H
 
 // ========================================== //
 // =============== INCLUDES ================= //

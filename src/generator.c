@@ -50,6 +50,7 @@ typedef struct {
   size_t if_counter; // Counter of if statements in a function.
   size_t while_counter; // Counter of while cycles in a function.
   size_t for_counter; // Counter of for cycles in a function.
+  size_t istr_counter; // Counter of interpolated strings in a function.
   bool was_concat; // Check for generating helper variables for concatenation.
   bool returns_unit; // Check if function returns unit type.
   size_t and_counter; // Counter of and expressions in a function.
@@ -67,6 +68,7 @@ typedef struct {
   bool strLength;
   bool subStr;
   bool ord;
+  bool floor;
 } builtins_checklist;
 
 /** @brief List for keeping track of mangling for variables declared inside the body of a function.*/
@@ -312,6 +314,13 @@ static int builtin_subStr();
 static int builtin_ord();
 
 /**
+ * @brief Generates code for valmem floor function.
+ *
+ * @return 0 on success, 1 on error.
+ */
+static int valmem_floor();
+
+/**
  * @brief Finds mangling of a variable.
  *
  * @param[in] var_list List of declared local variables.
@@ -416,6 +425,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
   func_globals->if_counter = 0;
   func_globals->while_counter = 0;
   func_globals->for_counter = 0;
+  func_globals->istr_counter = 0;
   func_globals->is_main = false;
   func_globals->was_concat = false;
   func_globals->function_head = (code_buffer){0};
@@ -1178,8 +1188,8 @@ static int generate_member(AST_MEMBER *member, function_globals *func_globals, v
   } else if (member->member_kind == MEMBER_TO_INT) {
     buffer_printf(&func_globals->function_body, "FLOAT2INTS\n");
   } else if (member->member_kind == MEMBER_FLOOR) {
-    buffer_printf(&func_globals->function_body, "FLOAT2INTS\n");
-    buffer_printf(&func_globals->function_body, "INT2FLOATS\n");
+    buffer_printf(&func_globals->function_body, "CALL !floor\n");
+    builtins->floor = true;
   } else if (member->member_kind == MEMBER_LENGTH) {
     buffer_printf(&func_globals->function_body, "CALL !strLength\n");
     builtins->strLength = true;
@@ -1195,13 +1205,22 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
     return 1;
   }
 
-  bool is_first = true;
+  if (interpolated->part_count > 0 && interpolated->parts == NULL) {
+    return 1;
+  }
 
   if (interpolated->part_count == 0) {
     buffer_printf(&func_globals->function_body, "PUSHS string@\n");
+    return 0;
   }
 
+  size_t local_istr = func_globals->istr_counter++;
+  buffer_printf(&func_globals->function_head, "DEFVAR %s$istr$%zu$str\n", func_globals->var_prefix, local_istr);
+  buffer_printf(&func_globals->function_head, "DEFVAR %s$istr$%zu$part\n", func_globals->var_prefix, local_istr);
+
   for (size_t i = 0; i < interpolated->part_count; i++) {
+    char *target = i == 0 ? "str" : "part";
+
     if (interpolated->parts[i].is_literal == true) {
       if (interpolated->parts[i].text == NULL) {
         return 1;
@@ -1210,46 +1229,23 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
       if (string == NULL) {
         return 1;
       }
-      if (interpolated->part_count > 1) {
-        buffer_printf(&func_globals->function_body, "MOVE %s$str%s string@%s\n", func_globals->var_prefix, is_first ? "1" : "2", string);
-        free(string);
-      } else {
-        buffer_printf(&func_globals->function_body, "PUSHS string@%s\n", string);
-        free(string);
-        break;
-      }
+      buffer_printf(&func_globals->function_body, "MOVE %s$istr$%zu$%s string@%s\n", func_globals->var_prefix, local_istr, target, string);
+      free(string);
     } else {
       if (generate_expression(interpolated->parts[i].expression, func_globals, var_list, builtins) != 0) {
         return 1;
       }
       buffer_printf(&func_globals->function_body, "CALL !toStr\n");
       builtins->toStr = true;
-      if (interpolated->part_count > 1) {
-        buffer_printf(&func_globals->function_body, "POPS %s$str%s\n", func_globals->var_prefix, is_first ? "1" : "2");
-      } else {
-        break;
-      }
+      buffer_printf(&func_globals->function_body, "POPS %s$istr$%zu$%s\n", func_globals->var_prefix, local_istr, target);
     }
-    if (is_first) {
-      is_first = false;
-      continue;
-    }
-    buffer_printf(&func_globals->function_body, "CONCAT %s$concatstr %s$str1 %s$str2\n", func_globals->var_prefix, func_globals->var_prefix, func_globals->var_prefix);
-    if (i < interpolated->part_count - 1) {
-      buffer_printf(&func_globals->function_body, "MOVE %s$str1 %s$concatstr\n", func_globals->var_prefix, func_globals->var_prefix);
+
+    if (i > 0) {
+      buffer_printf(&func_globals->function_body, "CONCAT %s$istr$%zu$str %s$istr$%zu$str %s$istr$%zu$part\n", func_globals->var_prefix, local_istr, func_globals->var_prefix, local_istr, func_globals->var_prefix, local_istr);
     }
   }
 
-  if (interpolated->part_count > 1) {
-    buffer_printf(&func_globals->function_body, "PUSHS %s$concatstr\n", func_globals->var_prefix);
-  }
-
-  if (func_globals->was_concat == false) {
-    func_globals->was_concat = true;
-    buffer_printf(&func_globals->function_head, "DEFVAR %s$str1\n", func_globals->var_prefix);
-    buffer_printf(&func_globals->function_head, "DEFVAR %s$str2\n", func_globals->var_prefix);
-    buffer_printf(&func_globals->function_head, "DEFVAR %s$concatstr\n", func_globals->var_prefix);
-  }
+  buffer_printf(&func_globals->function_body, "PUSHS %s$istr$%zu$str\n", func_globals->var_prefix, local_istr);
 
   return 0;
 }
@@ -1763,6 +1759,32 @@ static int builtin_ord() {
   return 0;
 }
 
+static int valmem_floor() {
+  printf("LABEL !floor\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+
+  printf("DEFVAR LF@val\n");
+  printf("DEFVAR LF@int\n");
+  printf("DEFVAR LF@trunc\n");
+  printf("DEFVAR LF@check\n");
+
+  printf("POPS LF@val\n");
+  printf("FLOAT2INT LF@int LF@val\n");
+  printf("INT2FLOAT LF@trunc LF@int\n");
+  printf("LT LF@check LF@val LF@trunc\n");
+  printf("JUMPIFEQ !floor$done LF@check bool@false\n");
+  printf("SUB LF@int LF@int int@1\n");
+  printf("INT2FLOAT LF@trunc LF@int\n");
+  printf("LABEL !floor$done\n");
+  printf("PUSHS LF@trunc\n");
+  
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+  printf("\n");
+  return 0;
+}
+
 // ========================================== //
 // ===== DEFINITION OF PUBLIC FUNCTIONS ===== //
 // ========================================== //
@@ -1788,6 +1810,7 @@ int generate_code(AST_PROGRAM *program) {
   builtins->strLength= false;
   builtins->subStr = false;
   builtins->ord = false;
+  builtins->floor = false;
 
   for (size_t i = 0; i < program->function_count; i++) {
     AST_FUNCTION_DEF *function = program->functions[i];
@@ -1854,6 +1877,12 @@ int generate_code(AST_PROGRAM *program) {
   }
   if (builtins->ord) {
     if (builtin_ord() != 0) {
+      free(builtins);
+      return 1;
+    }
+  }
+  if (builtins->floor) {
+    if (valmem_floor() != 0) {
       free(builtins);
       return 1;
     }
