@@ -440,51 +440,54 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
     func_globals->returns_unit = false;
   }
 
-  const char *base_function_name = function->is_main ? "$main" : function->name;
+  const char *base_function_name = function->name;
   bool has_receiver = !function->is_main && function->receiver != NULL;
   if (base_function_name == NULL) {
     buffer_free(&func_globals->function_head);
     buffer_free(&func_globals->function_body);
-    free(func_globals->function_name);
+    free(func_globals);
+    return 1;
+  }
+
+  if (function->function_id == SIZE_MAX) {
+    buffer_free(&func_globals->function_head);
+    buffer_free(&func_globals->function_body);
     free(func_globals);
     return 1;
   }
 
   size_t name_length = strlen(base_function_name);
   size_t ext_prefix_length = has_receiver ? 1 : 0;
-  if (name_length > SIZE_MAX - ext_prefix_length - 1) {
+  int suffix_length = snprintf(NULL, 0, "$%zu", function->function_id);
+  if ((suffix_length < 0) || (name_length > SIZE_MAX - ext_prefix_length - (size_t)suffix_length - 1)) {
     buffer_free(&func_globals->function_head);
     buffer_free(&func_globals->function_body);
-    free(func_globals->function_name);
     free(func_globals);
     return 1;
   }
-  func_globals->function_name = malloc(name_length + ext_prefix_length + 1);
+
+  func_globals->function_name = malloc(name_length + ext_prefix_length + (size_t)suffix_length + 1);
   if (func_globals->function_name == NULL) {
     buffer_free(&func_globals->function_head);
     buffer_free(&func_globals->function_body);
-    free(func_globals->function_name);
     free(func_globals);
     return 1;
   }
   if (has_receiver) {
     func_globals->function_name[0] = '*';
   }
-  memcpy(func_globals->function_name + ext_prefix_length, base_function_name, name_length + 1);
+  snprintf(func_globals->function_name + ext_prefix_length, name_length + (size_t)suffix_length + 1, "%s$%zu", base_function_name, function->function_id);
 
   bool is_last = false;
   var_list_node *var_list = NULL;
 
   if (function->is_main) {
     buffer_printf(&func_globals->function_head, "LABEL $main\n");
+    buffer_printf(&func_globals->function_head, "LABEL %s\n", function->name);
     func_globals->var_prefix = "GF@";
     func_globals->is_main = true;
   } else {
-    if (function->receiver == NULL) {
-      buffer_printf(&func_globals->function_head, "LABEL %s\n", function->name);
-    } else {
-      buffer_printf(&func_globals->function_head, "LABEL *%s\n", function->name);
-    }
+    buffer_printf(&func_globals->function_head, "LABEL %s\n", func_globals->function_name);
     func_globals->var_prefix = "LF@";
 
     buffer_printf(&func_globals->function_head, "CREATEFRAME\n");
@@ -1184,10 +1187,16 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, var_lis
   }
   
   if (call->callee_kind == CALLEE_USER_FUNCTION) {
-    buffer_printf(&func_globals->function_body, "CALL %s\n", call->name);
+    if (call->function_id == SIZE_MAX) {
+      return 1;
+    }
+    buffer_printf(&func_globals->function_body, "CALL %s$%zu\n", call->name, call->function_id);
 
   } else if (call->callee_kind == CALLEE_EXTENSION) {
-    buffer_printf(&func_globals->function_body, "CALL *%s\n", call->name);
+    if (call->function_id == SIZE_MAX) {
+      return 1;
+    }
+    buffer_printf(&func_globals->function_body, "CALL *%s$%zu\n", call->name, call->function_id);
 
   } else if (call->callee_kind == CALLEE_BUILTIN) {
     if (strcmp(call->name, "print") == 0) {
@@ -1233,7 +1242,11 @@ static int generate_member(AST_MEMBER *member, function_globals *func_globals, v
   }
 
   if (member->member_kind == MEMBER_EXT_PROPERTY) {
-    buffer_printf(&func_globals->function_body, "CALL *%s\n", member->member_name);
+    if (member->function_id == SIZE_MAX) {
+      return 1;
+    }
+    buffer_printf(&func_globals->function_body, "CALL *%s$%zu\n",
+                  member->member_name, member->function_id);
   } else if (member->member_kind == MEMBER_TO_STRING) {
     buffer_printf(&func_globals->function_body, "CALL !toStr\n");
     builtins->toStr = true;
