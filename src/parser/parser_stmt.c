@@ -1,11 +1,12 @@
 /**
  * @file parser_stmt.c
  * @brief Statements and blocks of IFJ26: val/var, assignment, return, if, while,
- *        expression statements, and indented blocks.
+ *        for, expression statements, and indented blocks.
  *
  *   statement  := ('val'|'var') ID [':' type] '=' expr | ID '=' expr | 'return' [expr]
- *               | if-stmt | 'while' expr 'do' branch | expr
+ *               | if-stmt | 'while' expr 'do' branch | for-stmt | expr
  *   if-stmt    := 'if' expr 'then' branch [ 'else' (if-stmt | branch) ]
+ *   for-stmt   := 'for' ID '<-' expr ('to'|'until') expr ['by' expr] { 'if' expr } 'do' branch
  *
  * Ownership rule (see ast.c): every ast_*_create_* / ast_*_add_* function
  * consumes the children passed to it, even when it fails. After handing a
@@ -279,6 +280,123 @@ fail:
     return rc;
 }
 
+/** 'if' expr  (one guard of a for loop) */
+static t_parse_rc parse_for_guard(t_parser *p, AST_STATEMENT *stmt) {
+    AST_EXPRESSION *guard = NULL;
+    TRY(parser_advance(p)); // 'if'
+    TRY(parse_expression(p, &guard));
+    return ast_rc(ast_statement_for_add_guard(stmt, guard)); // consumes guard
+}
+
+/**
+ * for i <- a to|until b [by s] { if guard } do branch
+ *
+ * Also the multi-line form (generator and guards each on their own line,
+ * between INDENT ... DEDENT, `do` on the level of `for`).
+ *
+ * `to`, `until` and `by` are not keywords in the lexer, they arrive as ID tokens.
+ * The statement is created right after the generator (with an empty placeholder
+ * body) so the guards can be added to it as they are parsed. The real body then
+ * replaces the placeholder.
+ */
+static t_parse_rc parse_for(t_parser *p, AST_STATEMENT **out) {
+    t_parse_rc rc;
+    SOURCE_LOCATION loc = loc_of(&p->cur);
+    bool multiline;
+    bool exclusive = false;
+    char *var = NULL;
+    AST_EXPRESSION *from = NULL;
+    AST_EXPRESSION *to = NULL;
+    AST_EXPRESSION *step = NULL;
+    AST_BLOCK *placeholder = NULL;
+    AST_BLOCK *body = NULL;
+    AST_STATEMENT *stmt = NULL;
+
+    CHECK(parser_advance(p)); // 'for'
+    multiline = (p->cur.type == TOKEN_EOL);
+    if (multiline) {
+        CHECK(parser_advance(p));
+        if (p->cur.type != TOKEN_INDENT) {
+            rc = parser_syntax_error(p, "expected the generator on an indented line, got %s", token_type_name(p->cur.type));
+            goto fail;
+        }
+        CHECK(parser_advance(p));
+    }
+
+    // generator
+    if (p->cur.type != TOKEN_ID) {
+        rc = parser_syntax_error(p, "expected the loop variable, got %s", token_type_name(p->cur.type));
+        goto fail;
+    }
+    var = parser_strdup(p->cur.value.str_val);
+    if (var == NULL) {
+        rc = PARSE_ERR_INTERNAL;
+        goto fail;
+    }
+    CHECK(parser_advance(p));
+    CHECK(parser_expect(p, TOKEN_LEFT_ARROW, "'<-'"));
+    CHECK(parse_expression(p, &from));
+
+    if (p->cur.type == TOKEN_ID && strcmp(p->cur.value.str_val, "to") == 0) {
+        exclusive = false;
+    } else if (p->cur.type == TOKEN_ID && strcmp(p->cur.value.str_val, "until") == 0) {
+        exclusive = true;
+    } else {
+        rc = parser_syntax_error(p, "expected 'to' or 'until' in the for generator");
+        goto fail;
+    }
+    CHECK(parser_advance(p));
+    CHECK(parse_expression(p, &to));
+
+    if (p->cur.type == TOKEN_ID && strcmp(p->cur.value.str_val, "by") == 0) {
+        CHECK(parser_advance(p));
+        CHECK(parse_expression(p, &step));
+    }
+
+    // from / to / step / placeholder are consumed by the call, also when it fails
+    placeholder = ast_block_create();
+    stmt = ast_statement_create_for(var, exclusive, from, to, step, placeholder, loc);
+    free(var);
+    var = NULL;
+    from = to = step = NULL;
+    placeholder = NULL;
+    if (stmt == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+
+    // guards
+    if (multiline) {
+        CHECK(parser_expect(p, TOKEN_EOL, "end of line after the generator"));
+        while (p->cur.type == TOKEN_KW_IF) {
+            CHECK(parse_for_guard(p, stmt));
+            CHECK(parser_expect(p, TOKEN_EOL, "end of line after the guard"));
+        }
+        CHECK(parser_expect(p, TOKEN_DEDENT, "the end of the for header"));
+    } else {
+        while (p->cur.type == TOKEN_KW_IF) {
+            CHECK(parse_for_guard(p, stmt));
+        }
+    }
+
+    CHECK(parser_expect(p, TOKEN_KW_DO, "'do'"));
+    CHECK(parse_branch(p, &body, false));
+
+    ast_block_destroy(stmt->data.for_stmt.body); // the placeholder
+    stmt->data.for_stmt.body = body;
+    *out = stmt;
+    return PARSE_OK;
+
+fail:
+    free(var);
+    ast_expression_destroy(from);
+    ast_expression_destroy(to);
+    ast_expression_destroy(step);
+    ast_block_destroy(placeholder);
+    ast_block_destroy(body);
+    ast_statement_destroy(stmt);
+    return rc;
+}
+
 /* expression used as a statement (also a bare call) */
 static t_parse_rc parse_expression_statement(t_parser *p, AST_STATEMENT **out) {
     SOURCE_LOCATION loc = loc_of(&p->cur);
@@ -303,6 +421,8 @@ static t_parse_rc parse_statement_body(t_parser *p, AST_STATEMENT **out) {
         return parse_if_statement(p, out);
     case TOKEN_KW_WHILE:
         return parse_while(p, out);
+    case TOKEN_KW_FOR:
+        return parse_for(p, out);
     case TOKEN_ID: {
         // `x = ...` is an assignment; anything else starting with an ID is
         // an expression or a call
