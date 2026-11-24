@@ -265,7 +265,7 @@ static t_semantics_result register_builtins(t_symtable *table) {
   if (result != SEMANTICS_OK)
     return result;
 
-    result = register_builtin(table, "readBool", TYPE_BOOLEAN, NULL, 0);
+  result = register_builtin(table, "readBoolean", TYPE_BOOLEAN, NULL, 0);
   if (result != SEMANTICS_OK)
     return result;
 
@@ -1590,32 +1590,33 @@ static t_semantics_result analyze_member(AST_EXPRESSION *expression,
 
   // Double.toInt -> Int
   if (strcmp(member->member_name, "toInt") == 0) {
-    if (receiver_type != TYPE_DOUBLE)
-      return SEMANTICS_ERR_TYPE;
-
-    member->member_kind = MEMBER_TO_INT;
-    expression->resolved_type = TYPE_INT;
-    return SEMANTICS_OK;
+    result = SEMANTICS_ERR_TYPE;
+    if (receiver_type == TYPE_DOUBLE) {
+      member->member_kind = MEMBER_TO_INT;
+      expression->resolved_type = TYPE_INT;
+      return SEMANTICS_OK;
+    }
   }
 
   // Double.floor -> Double
   if (strcmp(member->member_name, "floor") == 0) {
-    if (receiver_type != TYPE_DOUBLE)
-      return SEMANTICS_ERR_TYPE;
-
-    member->member_kind = MEMBER_FLOOR;
-    expression->resolved_type = TYPE_DOUBLE;
-    return SEMANTICS_OK;
+    result = SEMANTICS_ERR_TYPE;
+    if (receiver_type == TYPE_DOUBLE) {
+      member->member_kind = MEMBER_FLOOR;
+      expression->resolved_type = TYPE_DOUBLE;
+      return SEMANTICS_OK;
+    }
   }
+    
 
   // String.length -> Int
   if (strcmp(member->member_name, "length") == 0) {
-    if (receiver_type != TYPE_STRING)
-      return SEMANTICS_ERR_TYPE;
-
-    member->member_kind = MEMBER_LENGTH;
-    expression->resolved_type = TYPE_INT;
-    return SEMANTICS_OK;
+    result = SEMANTICS_ERR_TYPE;
+    if (receiver_type == TYPE_STRING) {
+      member->member_kind = MEMBER_LENGTH;
+      expression->resolved_type = TYPE_INT;
+      return SEMANTICS_OK;
+    }
   }
 
   // Otherwise try a parameterless extension method
@@ -1623,9 +1624,11 @@ static t_semantics_result analyze_member(AST_EXPRESSION *expression,
 
   t_symtable_result table_result = symtable_find_function(
       table, member->member_name, true, receiver_type, &id);
-
-  if (table_result == SYMTABLE_ERR_NOT_FOUND)
+  
+  if (table_result == SYMTABLE_ERR_NOT_FOUND) {
+    if (result == SEMANTICS_ERR_TYPE) return SEMANTICS_ERR_TYPE;
     return SEMANTICS_ERR_UNDEFINED;
+  }
 
   if (table_result != SYMTABLE_OK)
     return SEMANTICS_ERR_INTERNAL;
