@@ -81,8 +81,7 @@ t_parse_rc parse_indented_block(t_parser *p, AST_BLOCK **out) {
 
     TRY(parser_expect(p, TOKEN_EOL, "end of line"));
     if (p->cur.type != TOKEN_INDENT) {
-        return parser_syntax_error(p, "expected an indented block, got %s",
-                                   token_type_name(p->cur.type));
+        return parser_syntax_error(p, "expected an indented block, got %s", token_type_name(p->cur.type));
     }
     TRY(parser_advance(p));
 

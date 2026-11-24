@@ -1,10 +1,11 @@
 /**
  * @file parser_expr.c
- * @brief Expressions of IFJ26: operators by priority and calls.
+ * @brief Expressions of IFJ26: operators by priority, calls, members,
+ *        interpolated strings and if-expressions.
  *
  *   expr       := || < && < (== !=) < (< <= > >=) < (+ -) < (* /) < unary (+ - !) < postfix
  *   postfix    := primary { '.' ID [ { '(' args ')' } ] }
- *   primary    := literal | ID [ { '(' args ')' } ] | '(' [expr] ')'
+ *   primary    := literal | ID [ { '(' args ')' } ] | '(' [expr] ')' | interpolated | if-expr
  *
  * Ownership rule (see ast.c): every ast_*_create_* / ast_*_add_* function
  * consumes the children passed to it, even when it fails. After handing a
@@ -130,6 +131,74 @@ fail:
     return rc;
 }
 
+/**
+ * s"..." / s"""...""". The lexer gives: TEXT { ID TEXT | EXPR_BEGIN ... EXPR_END TEXT }.
+ * There is no END token: a TEXT part is the last one when the lexer is NOT in
+ * LEX_MODE_DOLLAR right after producing it (i.e. it stopped at the closing quote).
+ */
+static t_parse_rc parse_interpolated(t_parser *p, AST_EXPRESSION **out) {
+    t_parse_rc rc;
+    AST_EXPRESSION *str = ast_expression_create_interpolated(loc_of(&p->cur));
+    if (str == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+
+    for (;;) {
+        if (p->cur.type != TOKEN_ISTR_TEXT) {
+            rc = parser_syntax_error(p, "expected text inside an interpolated string, got %s", token_type_name(p->cur.type));
+            goto fail;
+        }
+        if (p->has_next) { // lexer_mode() would be one token too far
+            rc = PARSE_ERR_INTERNAL;
+            goto fail;
+        }
+        bool more = (lexer_mode(&p->lexer) == LEX_MODE_DOLLAR);
+
+        if (p->cur.value.str_val[0] != '\0') {
+            CHECK(ast_rc(ast_expression_interpolated_add_literal(str, p->cur.value.str_val)));
+        }
+        CHECK(parser_advance(p));
+        if (!more) {
+            break;
+        }
+
+        if (p->cur.type == TOKEN_ISTR_ID) {
+            AST_EXPRESSION *ref = ast_expression_create_var_ref(p->cur.value.str_val, loc_of(&p->cur));
+            if (ref == NULL) {
+                rc = PARSE_ERR_INTERNAL;
+                goto fail;
+            }
+            CHECK(ast_rc(ast_expression_interpolated_add_expression(str, ref)));
+            CHECK(parser_advance(p));
+        } else if (p->cur.type == TOKEN_ISTR_EXPR_BEGIN) {
+            AST_EXPRESSION *part = NULL;
+            CHECK(parser_advance(p));
+            CHECK(parse_expression(p, &part));
+            CHECK(ast_rc(ast_expression_interpolated_add_expression(str, part)));
+            if (p->cur.type != TOKEN_ISTR_EXPR_END) {
+                rc = parser_syntax_error(p, "expected '}', got %s", token_type_name(p->cur.type));
+                goto fail;
+            }
+            CHECK(parser_advance(p));
+        } else {
+            rc = parser_syntax_error(p, "unexpected %s inside an interpolated string",
+                              token_type_name(p->cur.type));
+            goto fail;
+        }
+    }
+
+    // s"" has no parts yet: give code generation one (empty) literal to work with
+    if (str->data.interpolated.part_count == 0) {
+        CHECK(ast_rc(ast_expression_interpolated_add_literal(str, "")));
+    }
+    *out = str;
+    return PARSE_OK;
+
+fail:
+    ast_expression_destroy(str);
+    return rc;
+}
+
 /** `if c then a else b` used as an expression (else is mandatory). */
 static t_parse_rc parse_if_expression(t_parser *p, AST_EXPRESSION **out) {
     t_parse_rc rc;
@@ -206,6 +275,8 @@ static t_parse_rc parse_primary(t_parser *p, AST_EXPRESSION **out) {
         return parse_identifier(p, out);
     case TOKEN_LEFT_PAREN:
         return parse_parenthesized(p, out);
+    case TOKEN_ISTR_TEXT:
+        return parse_interpolated(p, out);
     case TOKEN_KW_IF:
         return parse_if_expression(p, out);
     default:
@@ -239,8 +310,7 @@ static t_parse_rc parse_postfix(t_parser *p, AST_EXPRESSION **out) {
 
         CHECK(parser_advance(p)); // '.'
         if (p->cur.type != TOKEN_ID) {
-            rc = parser_syntax_error(p, "expected a member name after '.', got %s",
-                              token_type_name(p->cur.type));
+            rc = parser_syntax_error(p, "expected a member name after '.', got %s", token_type_name(p->cur.type));
             goto fail;
         }
         loc = loc_of(&p->cur);
