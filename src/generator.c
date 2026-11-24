@@ -104,7 +104,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
  * 
  * @return 0 on success, 1 on error.
  */
-static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins);
+static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool discard_result);
 
 /**
  * @brief Generates code for variable declarations.
@@ -480,6 +480,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
 
   bool is_last = false;
   var_list_node *var_list = NULL;
+  bool discard_result = false;
 
   if (function->is_main) {
     buffer_printf(&func_globals->function_head, "LABEL $main\n");
@@ -552,6 +553,8 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
     }
   }
 
+  buffer_printf(&func_globals->function_head, "DEFVAR %s$discard\n", func_globals->var_prefix);
+
   for (size_t i = 0; i < function->body->statement_count; i++) {
     AST_STATEMENT *statement = function->body->statements[i];
     if (statement == NULL) {
@@ -566,10 +569,9 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
       free(func_globals);
       return 1;
     }
-    if (i == function->body->statement_count - 1) {
-      is_last = true;
-    }
-    if (generate_statement(statement, func_globals, &var_list, builtins) != 0) {
+    is_last = i == function->body->statement_count - 1;
+    discard_result = !is_last || (func_globals->returns_unit && statement->type == STMT_EXPR);
+    if (generate_statement(statement, func_globals, &var_list, builtins, discard_result) != 0) {
       while (var_list != NULL) {
         var_list_node *var_node_delete = var_list;
         var_list = var_list->next;
@@ -640,7 +642,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
   return output_failed ? 1 : 0;
 }
 
-static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins) {
+static int generate_statement(AST_STATEMENT *statement, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool discard_result) {
   if (statement == NULL) {
     return 1;
   }
@@ -672,6 +674,9 @@ static int generate_statement(AST_STATEMENT *statement, function_globals *func_g
   } else if (statement->type == STMT_EXPR) {
     if (generate_expression(statement->data.expr_stmt.expression, func_globals, var_list, builtins) != 0) {
       return 1;
+    }
+    if (discard_result) {
+      buffer_printf(&func_globals->function_body, "POPS %s$discard\n", func_globals->var_prefix);
     }
   } else {
     return 1;
@@ -734,6 +739,9 @@ static int generate_return(AST_RETURN *return_stmt, function_globals *func_globa
   }
 
   if (func_globals->returns_unit) {
+    if (return_stmt->value != NULL) {
+      buffer_printf(&func_globals->function_body, "POPS %s$discard\n", func_globals->var_prefix);
+    }
     buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
   }
 
@@ -1338,7 +1346,8 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
+      bool discard_result = !is_expr || (i < if_stmt->then_block->statement_count - 1);
+      if (generate_statement(statement, func_globals, var_list, builtins, discard_result) != 0) {
         return 1;
       }
     }
@@ -1354,7 +1363,8 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
+      bool discard_result = !is_expr || (i < if_stmt->else_block->statement_count - 1);
+      if (generate_statement(statement, func_globals, var_list, builtins, discard_result) != 0) {
         return 1;
       }
     }
@@ -1376,7 +1386,8 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       if (statement == NULL) {
         return 1;
       }
-      if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
+      bool discard_result = !is_expr || (i < if_stmt->then_block->statement_count - 1);
+      if (generate_statement(statement, func_globals, var_list, builtins, discard_result) != 0) {
         return 1;
       }
     }
@@ -1420,7 +1431,7 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
     if (statement == NULL) {
       return 1;
     }
-    if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
+    if (generate_statement(statement, func_globals, var_list, builtins, true) != 0) {
       return 1;
     }
   }
@@ -1530,7 +1541,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     if (statement == NULL) {
       return 1;
     }
-    if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
+    if (generate_statement(statement, func_globals, var_list, builtins, true) != 0) {
       return 1;
     }
   }
