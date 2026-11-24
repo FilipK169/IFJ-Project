@@ -221,11 +221,11 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
  * @param[in,out] func_globals Structure for function name, files, checks and counters.
  * @param[in,out] var_list List of currently declared variables.
  * @param[in,out] builtins Checklist of used built-in functions.
- * @param[in] if_expr Is the if statement an expression.
+ * @param[in] is_expr Is the if statement an expression.
  * 
  * @return 0 on success, 1 on error.
  */
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool if_expr);
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool is_expr);
 
 /**
  * @brief Generates code for while cycles.
@@ -256,70 +256,70 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_print();
+static int builtin_print(void);
 
 /**
  * @brief Generates code for built-in readLine function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_readLine();
+static int builtin_readLine(void);
 
 /**
  * @brief Generates code for built-in readInt function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_readInt();
+static int builtin_readInt(void);
 
 /**
  * @brief Generates code for built-in readDouble function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_readDouble();
+static int builtin_readDouble(void);
 
 /**
  * @brief Generates code for built-in readBoolean function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_readBoolean();
+static int builtin_readBoolean(void);
 
 /**
  * @brief Generates code for built-in toStr function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_toStr();
+static int builtin_toStr(void);
 
 /**
  * @brief Generates code for built-in strLength function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_strLength();
+static int builtin_strLength(void);
 
 /**
  * @brief Generates code for built-in subStr function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_subStr();
+static int builtin_subStr(void);
 
 /**
  * @brief Generates code for built-in ord function.
  *
  * @return 0 on success, 1 on error.
  */
-static int builtin_ord();
+static int builtin_ord(void);
 
 /**
  * @brief Generates code for valmem floor function.
  *
  * @return 0 on success, 1 on error.
  */
-static int valmem_floor();
+static int valmem_floor(void);
 
 /**
  * @brief Finds mangling of a variable.
@@ -588,6 +588,19 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         buffer_printf(&func_globals->function_body, "POPFRAME\n");
         buffer_printf(&func_globals->function_body, "RETURN\n");
       }
+    }
+  }
+
+  if (function->body->statement_count == 0 && func_globals->returns_unit && !func_globals->is_main) {
+    buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
+  }
+
+  if (function->body->statement_count == 0) {
+    if (func_globals->is_main) {
+      buffer_printf(&func_globals->function_body, "EXIT int@0\n");
+    } else {
+      buffer_printf(&func_globals->function_body, "POPFRAME\n");
+      buffer_printf(&func_globals->function_body, "RETURN\n");
     }
   }
 
@@ -1289,7 +1302,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
   return 0;
 }
 
-static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool if_expr) {
+static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list_node **var_list, builtins_checklist *builtins, bool is_expr) {
   if (if_stmt == NULL) {
     return 1;
   }
@@ -1316,6 +1329,9 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
         return 1;
       }
     }
+    if (is_expr && if_stmt->then_block->resolved_type == TYPE_UNIT && (if_stmt->then_block->statement_count == 0 || (if_stmt->then_block->statements[if_stmt->then_block->statement_count - 1]->type != STMT_EXPR))) {
+      buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
+    }
   } else {
     buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$if$%zu\n", func_globals->function_name, local_if);
     func_globals->var_mangling_counter++;
@@ -1328,6 +1344,9 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
         return 1;
       }
+    }
+    if (is_expr && if_stmt->else_block->resolved_type == TYPE_UNIT && (if_stmt->else_block->statement_count == 0 || (if_stmt->else_block->statements[if_stmt->else_block->statement_count - 1]->type != STMT_EXPR))) {
+      buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
     }
     while (*var_list != NULL && (*var_list)->mangling > prev_mangling) {
       var_list_node *var_node_delete = *var_list;
@@ -1347,6 +1366,9 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
       if (generate_statement(statement, func_globals, var_list, builtins) != 0) {
         return 1;
       }
+    }
+    if (is_expr && if_stmt->then_block->resolved_type == TYPE_UNIT && (if_stmt->then_block->statement_count == 0 || (if_stmt->then_block->statements[if_stmt->then_block->statement_count - 1]->type != STMT_EXPR))) {
+      buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
     }
   }
   buffer_printf(&func_globals->function_body, "LABEL %s$if$%zu$end\n", func_globals->function_name, local_if);
@@ -1566,7 +1588,7 @@ static char* convert_string(const char *string, size_t length) {
   return converted;
 }
 
-static int builtin_print() {
+static int builtin_print(void) {
   printf("LABEL !print\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1587,7 +1609,7 @@ static int builtin_print() {
   return 0;
 }
 
-static int builtin_readLine() {
+static int builtin_readLine(void) {
   printf("LABEL !readLine\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1602,7 +1624,7 @@ static int builtin_readLine() {
   return 0;
 }
 
-static int builtin_readInt() {
+static int builtin_readInt(void) {
   printf("LABEL !readInt\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1617,7 +1639,7 @@ static int builtin_readInt() {
   return 0;
 }
 
-static int builtin_readDouble() {
+static int builtin_readDouble(void) {
   printf("LABEL !readDouble\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1632,7 +1654,7 @@ static int builtin_readDouble() {
   return 0;
 }
 
-static int builtin_readBoolean() {
+static int builtin_readBoolean(void) {
   printf("LABEL !readBoolean\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1647,7 +1669,7 @@ static int builtin_readBoolean() {
   return 0;
 }
 
-static int builtin_toStr() {
+static int builtin_toStr(void) {
   printf("LABEL !toStr\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1696,7 +1718,7 @@ static int builtin_toStr() {
   return 0;
 }
 
-static int builtin_strLength() {
+static int builtin_strLength(void) {
   printf("LABEL !strLength\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1714,7 +1736,7 @@ static int builtin_strLength() {
   return 0;
 }
 
-static int builtin_subStr() {
+static int builtin_subStr(void) {
   printf("LABEL !subStr\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1767,7 +1789,7 @@ static int builtin_subStr() {
   return 0;
 }
 
-static int builtin_ord() {
+static int builtin_ord(void) {
   printf("LABEL !ord\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
@@ -1804,7 +1826,7 @@ static int builtin_ord() {
   return 0;
 }
 
-static int valmem_floor() {
+static int valmem_floor(void) {
   printf("LABEL !floor\n");
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
