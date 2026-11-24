@@ -2,7 +2,8 @@
  * @file parser_expr.c
  * @brief Expressions of IFJ26: operators by priority and calls.
  *
- *   expr       := || < && < (== !=) < (< <= > >=) < (+ -) < (* /) < unary (+ - !)
+ *   expr       := || < && < (== !=) < (< <= > >=) < (+ -) < (* /) < unary (+ - !) < postfix
+ *   postfix    := primary { '.' ID [ { '(' args ')' } ] }
  *   primary    := literal | ID [ { '(' args ')' } ] | '(' [expr] ')'
  *
  * Ownership rule (see ast.c): every ast_*_create_* / ast_*_add_* function
@@ -129,6 +130,58 @@ fail:
     return rc;
 }
 
+/** `if c then a else b` used as an expression (else is mandatory). */
+static t_parse_rc parse_if_expression(t_parser *p, AST_EXPRESSION **out) {
+    t_parse_rc rc;
+    SOURCE_LOCATION loc = loc_of(&p->cur);
+    AST_EXPRESSION *cond = NULL;
+    AST_BLOCK *then_block = NULL;
+    AST_BLOCK *else_block = NULL;
+    AST_EXPRESSION *result;
+
+    CHECK(parser_advance(p)); // 'if'
+    CHECK(parse_expression(p, &cond));
+    CHECK(parser_expect(p, TOKEN_KW_THEN, "'then'"));
+    CHECK(parse_branch(p, &then_block, true));
+    CHECK(parser_skip_eol_before_else(p));
+
+    if (p->cur.type != TOKEN_KW_ELSE) {
+        rc = parser_syntax_error(p, "expected 'else' (an if expression needs an else branch), got %s", token_type_name(p->cur.type));
+        goto fail;
+    }
+    CHECK(parser_advance(p));
+
+    if (p->cur.type == TOKEN_KW_IF) { // else if ...
+        SOURCE_LOCATION nested_loc = loc_of(&p->cur);
+        AST_EXPRESSION *nested = NULL;
+        AST_STATEMENT *stmt;
+        CHECK(parser_enter(p));
+        CHECK(parse_if_expression(p, &nested));
+        parser_leave(p);
+        stmt = ast_statement_create_expr(nested, nested_loc);
+        if (stmt == NULL) {
+            rc = PARSE_ERR_INTERNAL;
+            goto fail;
+        }
+        CHECK(parser_block_from_statement(stmt, &else_block));
+    } else {
+        CHECK(parse_branch(p, &else_block, true));
+    }
+
+    result = ast_expression_create_if(cond, then_block, else_block, loc); // consumes all 3
+    if (result == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+    *out = result;
+    return PARSE_OK;
+
+fail:
+    ast_expression_destroy(cond);
+    ast_block_destroy(then_block);
+    ast_block_destroy(else_block);
+    return rc;
+}
+
 static t_parse_rc parse_primary(t_parser *p, AST_EXPRESSION **out) {
     SOURCE_LOCATION loc = loc_of(&p->cur);
     AST_EXPRESSION *e = NULL;
@@ -153,6 +206,8 @@ static t_parse_rc parse_primary(t_parser *p, AST_EXPRESSION **out) {
         return parse_identifier(p, out);
     case TOKEN_LEFT_PAREN:
         return parse_parenthesized(p, out);
+    case TOKEN_KW_IF:
+        return parse_if_expression(p, out);
     default:
         return parser_syntax_error(p, "unexpected %s, expected an expression", token_type_name(p->cur.type));
     }
@@ -170,16 +225,70 @@ static t_parse_rc parse_primary(t_parser *p, AST_EXPRESSION **out) {
     return PARSE_OK;
 }
 
+/** primary { '.' ID [ '(' args ')' ... ] } : members and method calls */
+static t_parse_rc parse_postfix(t_parser *p, AST_EXPRESSION **out) {
+    t_parse_rc rc;
+    AST_EXPRESSION *e = NULL;
+
+    TRY(parse_primary(p, &e));
+
+    while (p->cur.type == TOKEN_DOT) {
+        char *name;
+        SOURCE_LOCATION loc;
+        AST_EXPRESSION *made;
+
+        CHECK(parser_advance(p)); // '.'
+        if (p->cur.type != TOKEN_ID) {
+            rc = parser_syntax_error(p, "expected a member name after '.', got %s",
+                              token_type_name(p->cur.type));
+            goto fail;
+        }
+        loc = loc_of(&p->cur);
+        name = parser_strdup(p->cur.value.str_val); // advance frees the token's string
+        if (name == NULL) {
+            rc = PARSE_ERR_INTERNAL;
+            goto fail;
+        }
+        rc = parser_advance(p);
+        if (rc != PARSE_OK) {
+            free(name);
+            goto fail;
+        }
+
+        // x.name(...) is a call with receiver, x.name is a member access
+        if (p->cur.type == TOKEN_LEFT_PAREN) {
+            made = ast_expression_create_call(name, e, loc);
+        } else {
+            made = ast_expression_create_member(e, name, loc);
+        }
+        free(name);
+        e = made; // the old `e` was consumed (also on failure)
+        if (e == NULL) {
+            return PARSE_ERR_INTERNAL;
+        }
+        if (e->type == EXPR_CALL) {
+            CHECK(parse_call_arg_lists(p, e));
+        }
+    }
+
+    *out = e;
+    return PARSE_OK;
+
+fail:
+    ast_expression_destroy(e);
+    return rc;
+}
+
 /* Prefix + - ! (right associative, highest priority). */
 static t_parse_rc parse_unary(t_parser *p, AST_EXPRESSION **out) {
     ENUM_UNARY_OPERATOR op;
 
     switch (p->cur.type) {
     case TOKEN_MINUS: op = UNARY_MINUS; break;
-    case TOKEN_PLUS:  op = UNARY_PLUS;  break;
-    case TOKEN_NOT:   op = UNARY_NOT;   break;
+    case TOKEN_PLUS: op = UNARY_PLUS;  break;
+    case TOKEN_NOT: op = UNARY_NOT;   break;
     default:
-        return parse_primary(p, out);
+        return parse_postfix(p, out);
     }
 
     SOURCE_LOCATION loc = loc_of(&p->cur);

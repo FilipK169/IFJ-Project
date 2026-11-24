@@ -1,22 +1,15 @@
 /**
  * @file parser_stmt.c
- * @brief Statements and blocks of the IFJ26 base language.
+ * @brief Statements and blocks of IFJ26: val/var, assignment, return, if, while,
+ *        expression statements, and indented blocks.
  *
- *   statement  := ('val'|'var') ID [':' type] '=' expr
- *               | ID '=' expr
- *               | 'return' [expr]
- *               | if-stmt
- *               | 'while' expr 'do' block
- *               | expr
- *   if-stmt    := 'if' expr 'then' block 'else' block
- *   block      := EOL INDENT statement { separator statement } DEDENT
- *
- * The base language has no inline branches: `if` and `while` bodies are
- * always indented blocks, and `else` is mandatory. `else if` and `for` are
- * extension features (BOOLTHEN / CONTROL) and are rejected here.
+ *   statement  := ('val'|'var') ID [':' type] '=' expr | ID '=' expr | 'return' [expr]
+ *               | if-stmt | 'while' expr 'do' branch | expr
+ *   if-stmt    := 'if' expr 'then' branch [ 'else' (if-stmt | branch) ]
  *
  * Ownership rule (see ast.c): every ast_*_create_* / ast_*_add_* function
- * consumes the children passed to it, even when it fails.
+ * consumes the children passed to it, even when it fails. After handing a
+ * node over, the parser must NOT free it again.
  *
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
@@ -63,6 +56,21 @@ t_parse_rc parser_inline_expr_block(t_parser *p, AST_BLOCK **out) {
         return PARSE_ERR_INTERNAL;
     }
     return parser_block_from_statement(stmt, out);
+}
+
+/** Single-line branch made of one statement: `if c then x = 1 else x = 2`. */
+static t_parse_rc inline_statement_block(t_parser *p, AST_BLOCK **out) {
+    AST_STATEMENT *stmt = NULL;
+    TRY(parse_statement(p, &stmt));
+    return parser_block_from_statement(stmt, out);
+}
+
+/** Body after `then` / `else` / `do`: an indented block or one inline item. */
+t_parse_rc parse_branch(t_parser *p, AST_BLOCK **out, bool as_expression) {
+    if (p->cur.type == TOKEN_EOL) {
+        return parse_indented_block(p, out);
+    }
+    return as_expression ? parser_inline_expr_block(p, out) : inline_statement_block(p, out);
 }
 
 /* EOL INDENT statement { separator statement } DEDENT */
@@ -121,8 +129,7 @@ static t_parse_rc parse_var_decl(t_parser *p, AST_STATEMENT **out) {
 
     TRY(parser_advance(p)); // val / var
     if (p->cur.type != TOKEN_ID) {
-        return parser_syntax_error(p, "expected a variable name, got %s",
-                                   token_type_name(p->cur.type));
+        return parser_syntax_error(p, "expected a variable name, got %s", token_type_name(p->cur.type));
     }
     name = parser_strdup(p->cur.value.str_val);
     if (name == NULL) {
@@ -189,6 +196,7 @@ static t_parse_rc parse_return(t_parser *p, AST_STATEMENT **out) {
         case TOKEN_SEMICOLON:
         case TOKEN_DEDENT:
         case TOKEN_EOF:
+        case TOKEN_KW_ELSE:
             break; // plain `return`
         default:
             TRY(parse_expression(p, &value));
@@ -203,7 +211,7 @@ static t_parse_rc parse_return(t_parser *p, AST_STATEMENT **out) {
     return PARSE_OK;
 }
 
-/** if expr then BLOCK else BLOCK  (both blocks mandatory, no else-if) */
+/** if c then branch [else (if ... | branch)]  as a statement (else optional) */
 static t_parse_rc parse_if_statement(t_parser *p, AST_STATEMENT **out) {
     t_parse_rc rc;
     SOURCE_LOCATION loc = loc_of(&p->cur);
@@ -215,19 +223,23 @@ static t_parse_rc parse_if_statement(t_parser *p, AST_STATEMENT **out) {
     CHECK(parser_advance(p)); // 'if'
     CHECK(parse_expression(p, &cond));
     CHECK(parser_expect(p, TOKEN_KW_THEN, "'then'"));
-    CHECK(parse_indented_block(p, &then_block));
+    CHECK(parse_branch(p, &then_block, false));
     CHECK(parser_skip_eol_before_else(p));
 
-    if (p->cur.type != TOKEN_KW_ELSE) {
-        rc = parser_syntax_error(p,
-            "expected 'else' (mandatory in the base language), got %s",
-            token_type_name(p->cur.type));
-        goto fail;
+    if (p->cur.type == TOKEN_KW_ELSE) {
+        CHECK(parser_advance(p));
+        if (p->cur.type == TOKEN_KW_IF) { // else if ...
+            AST_STATEMENT *nested = NULL;
+            CHECK(parser_enter(p));
+            CHECK(parse_if_statement(p, &nested));
+            parser_leave(p);
+            CHECK(parser_block_from_statement(nested, &else_block));
+        } else {
+            CHECK(parse_branch(p, &else_block, false));
+        }
     }
-    CHECK(parser_advance(p));
-    CHECK(parse_indented_block(p, &else_block));
 
-    result = ast_statement_create_if(cond, then_block, else_block, loc);
+    result = ast_statement_create_if(cond, then_block, else_block, loc); // consumes all
     if (result == NULL) {
         return PARSE_ERR_INTERNAL;
     }
@@ -252,7 +264,7 @@ static t_parse_rc parse_while(t_parser *p, AST_STATEMENT **out) {
     CHECK(parser_advance(p)); // 'while'
     CHECK(parse_expression(p, &cond));
     CHECK(parser_expect(p, TOKEN_KW_DO, "'do'"));
-    CHECK(parse_indented_block(p, &body));
+    CHECK(parse_branch(p, &body, false));
 
     result = ast_statement_create_while(cond, body, loc);
     if (result == NULL) {

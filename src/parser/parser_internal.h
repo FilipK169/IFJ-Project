@@ -155,6 +155,9 @@ t_parse_rc parser_block_from_statement(AST_STATEMENT *stmt, AST_BLOCK **out);
 /** @brief One-line function body: `def f() = expr`, wrapped in a one-statement block. */
 t_parse_rc parser_inline_expr_block(t_parser *p, AST_BLOCK **out);
 
+/** @brief Body after then / else / do: an indented block or one inline item. */
+t_parse_rc parse_branch(t_parser *p, AST_BLOCK **out, bool as_expression);
+
 /** @brief `EOL INDENT statement { separator statement } DEDENT`. */
 t_parse_rc parse_indented_block(t_parser *p, AST_BLOCK **out);
 
