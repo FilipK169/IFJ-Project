@@ -24,6 +24,18 @@
 #include <string.h>
 
 // ========================================== //
+//           PRIVATE STRUCTURES           //
+// ========================================== //
+
+/** Receiver of an `extension (name: Type)` block, copied into every method. */
+typedef struct {
+    bool present;
+    char *name;
+    ENUM_DATA_TYPE type;
+    SOURCE_LOCATION location;
+} t_receiver;
+
+// ========================================== //
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
 // ========================================== //
 
@@ -190,6 +202,9 @@ t_parse_rc parse_type(t_parser *p, ENUM_DATA_TYPE *out) {
     case TOKEN_KW_UNIT:
         *out = TYPE_UNIT;
         break;
+    case TOKEN_KW_BOOLEAN:
+         *out = TYPE_BOOLEAN;
+         break;
     default:
         return parser_syntax_error(p, "expected a type, got %s", token_type_name(p->cur.type));
     }
@@ -243,7 +258,7 @@ fail:
     return rc;
 }
 
-/** '(' [param {',' param} [',']] ')'  - exactly one list in the base language */
+/** '(' [param {',' param} [',']] ')'  - one parameter list */
 static t_parse_rc parse_param_list(t_parser *p, AST_FUNCTION_DEF *fn) {
     TRY(ast_rc(ast_function_def_add_param_list(fn)));
     TRY(parser_advance(p)); // '('
@@ -264,19 +279,23 @@ static t_parse_rc parse_param_list(t_parser *p, AST_FUNCTION_DEF *fn) {
     return parser_expect(p, TOKEN_RIGHT_PAREN, "')'");
 }
 
-/** def name (params) [: type] = body */
-static t_parse_rc parse_function(t_parser *p, bool is_main, AST_FUNCTION_DEF **out) {
+/**
+ * def name {paramlist} [: type] = body
+ *
+ * Zero parameter lists (`def answer: Int = 42`) means param_list_count == 0,
+ * `def f()` gives one empty list.
+ */
+static t_parse_rc parse_function(t_parser *p, bool is_main, const t_receiver *recv,
+                                 AST_FUNCTION_DEF **out) {
     t_parse_rc rc;
     AST_FUNCTION_DEF *fn = NULL;
 
     if (p->cur.type != TOKEN_KW_DEF) {
-        return parser_syntax_error(p, "expected 'def', got %s",
-                                   token_type_name(p->cur.type));
+        return parser_syntax_error(p, "expected 'def', got %s", token_type_name(p->cur.type));
     }
     TRY(parser_advance(p));
     if (p->cur.type != TOKEN_ID) {
-        return parser_syntax_error(p, "expected a function name, got %s",
-                                   token_type_name(p->cur.type));
+        return parser_syntax_error(p, "expected a function name, got %s", token_type_name(p->cur.type));
     }
 
     fn = ast_function_def_create(p->cur.value.str_val, loc_of(&p->cur));
@@ -286,14 +305,12 @@ static t_parse_rc parse_function(t_parser *p, bool is_main, AST_FUNCTION_DEF **o
     fn->is_main = is_main;
     CHECK(parser_advance(p));
 
-    // base language: exactly one parameter list required
-    if (p->cur.type != TOKEN_LEFT_PAREN) {
-        rc = parser_syntax_error(p, "expected '(' after the function name, got %s",
-                                 token_type_name(p->cur.type));
-        goto fail;
+    if (recv->present) {
+        CHECK(ast_rc(ast_function_def_set_receiver(fn, recv->name, recv->type, recv->location)));
     }
-    CHECK(parse_param_list(p, fn));
-
+    while (p->cur.type == TOKEN_LEFT_PAREN) {
+        CHECK(parse_param_list(p, fn));
+    }
     if (p->cur.type == TOKEN_COLON) {
         CHECK(parser_advance(p));
         CHECK(parse_type(p, &fn->declared_return_type));
@@ -316,13 +333,63 @@ fail:
 }
 
 /** Parses one function and appends it to the program (consumed in every case). */
-static t_parse_rc parse_and_add_function(t_parser *p, AST_PROGRAM *program, bool is_main) {
+static t_parse_rc parse_and_add_function(t_parser *p, AST_PROGRAM *program, bool is_main, const t_receiver *recv) {
     AST_FUNCTION_DEF *fn = NULL;
-    TRY(parse_function(p, is_main, &fn));
+    TRY(parse_function(p, is_main, recv, &fn));
     return ast_rc(ast_program_add_function(program, fn));
 }
 
+/** `extension` is not a lexer keyword, so it arrives as an ID. */
+static bool is_extension_keyword(const t_token *tok) {
+    return tok->type == TOKEN_ID && strcmp(tok->value.str_val, "extension") == 0;
+}
+
+/** extension (name: Type)  followed by one method, or by an indented block of methods */
+static t_parse_rc parse_extension(t_parser *p, AST_PROGRAM *program) {
+    t_parse_rc rc;
+    t_receiver recv = {false, NULL, TYPE_UNSPECIFIED, {0, 0}};
+
+    TRY(parser_advance(p)); // 'extension'
+    TRY(parser_expect(p, TOKEN_LEFT_PAREN, "'(' after 'extension'"));
+    if (p->cur.type != TOKEN_ID) {
+        return parser_syntax_error(p, "expected the receiver name, got %s", token_type_name(p->cur.type));
+    }
+    recv.location = loc_of(&p->cur);
+    recv.name = parser_strdup(p->cur.value.str_val);
+    if (recv.name == NULL) {
+        return PARSE_ERR_INTERNAL;
+    }
+    recv.present = true;
+
+    CHECK(parser_advance(p));
+    CHECK(parser_expect(p, TOKEN_COLON, "':' after the receiver name"));
+    CHECK(parse_type(p, &recv.type));
+    CHECK(parser_expect(p, TOKEN_RIGHT_PAREN, "')'"));
+
+    if (p->cur.type == TOKEN_EOL) {
+        CHECK(parser_advance(p));
+        if (p->cur.type != TOKEN_INDENT) {
+            rc = parser_syntax_error(p, "expected an indented block of methods, got %s", token_type_name(p->cur.type));
+            goto fail;
+        }
+        CHECK(parser_advance(p));
+        while (p->cur.type != TOKEN_DEDENT) {
+            CHECK(parse_and_add_function(p, program, false, &recv)); // errors on non-'def'
+        }
+        CHECK(parser_advance(p)); // DEDENT
+    } else {
+        CHECK(parse_and_add_function(p, program, false, &recv));
+    }
+    rc = PARSE_OK;
+
+fail:
+    free(recv.name);
+    return rc;
+}
+
 static t_parse_rc parse_program(t_parser *p, AST_PROGRAM *program) {
+    static const t_receiver NO_RECEIVER = {false, NULL, TYPE_UNSPECIFIED, {0, 0}};
+
     TRY(parse_prolog(p));
 
     for (;;) {
@@ -335,14 +402,18 @@ static t_parse_rc parse_program(t_parser *p, AST_PROGRAM *program) {
             if (p->cur.type == TOKEN_EOL) { // @main on its own line
                 TRY(parser_advance(p));
             }
-            TRY(parse_and_add_function(p, program, true));
+            TRY(parse_and_add_function(p, program, true, &NO_RECEIVER));
             break;
 
         case TOKEN_KW_DEF:
-            TRY(parse_and_add_function(p, program, false));
+            TRY(parse_and_add_function(p, program, false, &NO_RECEIVER));
             break;
 
         default:
+            if (is_extension_keyword(&p->cur)) {
+                TRY(parse_extension(p, program));
+                break;
+            }
             return parser_syntax_error(p, "expected a function definition, got %s", token_type_name(p->cur.type));
         }
     }
@@ -375,7 +446,6 @@ t_parse_rc parser_parse(FILE *in, AST_PROGRAM **out_program) {
         return PARSE_ERR_INTERNAL;
     }
 
-    // Step 1 only: walk through all tokens until EOF
     rc = parser_advance(&p); // load the first token
     if (rc == PARSE_OK) {
         rc = parse_program(&p, program);

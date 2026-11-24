@@ -2,12 +2,12 @@
  * @file parser_stmt.c
  * @brief Statements and blocks of the IFJ26 base language.
  *
- *   statement  := ('val'|'var') ID [':' type] '=' rhs
- *               | ID '=' rhs
- *               | 'return' [rhs]
+ *   statement  := ('val'|'var') ID [':' type] '=' expr
+ *               | ID '=' expr
+ *               | 'return' [expr]
  *               | if-stmt
  *               | 'while' expr 'do' block
- *               | rhs
+ *               | expr
  *   if-stmt    := 'if' expr 'then' block 'else' block
  *   block      := EOL INDENT statement { separator statement } DEDENT
  *
@@ -53,11 +53,11 @@ t_parse_rc parser_block_from_statement(AST_STATEMENT *stmt, AST_BLOCK **out) {
     return PARSE_OK;
 }
 
-/** One-line function body: `def f() = 2 + 3` or `def f() = print(x)`. */
+/* One-line function body: `def f() = 2 + 3` or `def f() = print(x)`. */
 t_parse_rc parser_inline_expr_block(t_parser *p, AST_BLOCK **out) {
     SOURCE_LOCATION loc = loc_of(&p->cur);
     AST_EXPRESSION *expr = NULL;
-    TRY(parse_rhs(p, &expr));
+    TRY(parse_expression(p, &expr));
     AST_STATEMENT *stmt = ast_statement_create_expr(expr, loc);
     if (stmt == NULL) {
         return PARSE_ERR_INTERNAL;
@@ -65,7 +65,7 @@ t_parse_rc parser_inline_expr_block(t_parser *p, AST_BLOCK **out) {
     return parser_block_from_statement(stmt, out);
 }
 
-/** EOL INDENT statement { separator statement } DEDENT */
+/* EOL INDENT statement { separator statement } DEDENT */
 t_parse_rc parse_indented_block(t_parser *p, AST_BLOCK **out) {
     t_parse_rc rc;
     AST_BLOCK *block = NULL;
@@ -98,7 +98,7 @@ t_parse_rc parse_indented_block(t_parser *p, AST_BLOCK **out) {
     }
 
     CHECK(parser_advance(p)); // DEDENT
-    p->after_block = true;    // set AFTER advance, advance clears it
+    p->after_block = true; // set AFTER advance, advance clears it
     *out = block;
     return PARSE_OK;
 
@@ -109,7 +109,7 @@ fail:
 
 // ---------- statements ---------- //
 
-/** val / var  name [: type] = rhs */
+/* val / var  name [: type] = expr */
 static t_parse_rc parse_var_decl(t_parser *p, AST_STATEMENT **out) {
     t_parse_rc rc;
     bool is_mutable = (p->cur.type == TOKEN_KW_VAR);
@@ -135,7 +135,7 @@ static t_parse_rc parse_var_decl(t_parser *p, AST_STATEMENT **out) {
         CHECK(parse_type(p, &type));
     }
     CHECK(parser_expect(p, TOKEN_ASSIGN, "'=' (a variable must be initialized)"));
-    CHECK(parse_rhs(p, &init));
+    CHECK(parse_expression(p, &init));
 
     stmt = ast_statement_create_var_decl(name, is_mutable, type, init, loc);
     free(name);
@@ -150,7 +150,7 @@ fail:
     return rc;
 }
 
-/** name = rhs  (the caller already saw ID '=') */
+/* name = expr   (the caller already saw ID '=') */
 static t_parse_rc parse_assignment(t_parser *p, AST_STATEMENT **out) {
     t_parse_rc rc;
     SOURCE_LOCATION loc = loc_of(&p->cur);
@@ -163,7 +163,7 @@ static t_parse_rc parse_assignment(t_parser *p, AST_STATEMENT **out) {
     }
     CHECK(parser_advance(p)); // the identifier
     CHECK(parser_advance(p)); // '='
-    CHECK(parse_rhs(p, &value));
+    CHECK(parse_expression(p, &value));
 
     stmt = ast_statement_create_assignment(name, value, loc);
     free(name);
@@ -178,7 +178,7 @@ fail:
     return rc;
 }
 
-/** return [rhs] */
+/* return [expr] */
 static t_parse_rc parse_return(t_parser *p, AST_STATEMENT **out) {
     SOURCE_LOCATION loc = loc_of(&p->cur);
     AST_EXPRESSION *value = NULL;
@@ -191,7 +191,7 @@ static t_parse_rc parse_return(t_parser *p, AST_STATEMENT **out) {
         case TOKEN_EOF:
             break; // plain `return`
         default:
-            TRY(parse_rhs(p, &value));
+            TRY(parse_expression(p, &value));
             break;
     }
 
@@ -267,11 +267,11 @@ fail:
     return rc;
 }
 
-/** rhs used as a statement: `f(1)`, `x`, `1 + 2` */
+/* expression used as a statement (also a bare call) */
 static t_parse_rc parse_expression_statement(t_parser *p, AST_STATEMENT **out) {
     SOURCE_LOCATION loc = loc_of(&p->cur);
     AST_EXPRESSION *expr = NULL;
-    TRY(parse_rhs(p, &expr));
+    TRY(parse_expression(p, &expr));
     AST_STATEMENT *stmt = ast_statement_create_expr(expr, loc);
     if (stmt == NULL) {
         return PARSE_ERR_INTERNAL;
