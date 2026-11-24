@@ -847,13 +847,15 @@ static t_semantics_result analyze_assignment(AST_ASSIGNMENT *assignment,
   if (!symbol->is_mutable)
     return SEMANTICS_ERR_IMMUTABLE;
 
+  ENUM_DATA_TYPE expected_type = symbol->type;
+
   t_semantics_result result =
       analyze_expression(assignment->value, function, context);
 
   if (result != SEMANTICS_OK)
     return result;
 
-  result = check_expression_type(assignment->value, symbol->type);
+  result = check_expression_type(assignment->value, expected_type);
 
   if (result != SEMANTICS_OK)
     return result;
