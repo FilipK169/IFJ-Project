@@ -265,6 +265,10 @@ static t_semantics_result register_builtins(t_symtable *table) {
   if (result != SEMANTICS_OK)
     return result;
 
+    result = register_builtin(table, "readBool", TYPE_BOOLEAN, NULL, 0);
+  if (result != SEMANTICS_OK)
+    return result;
+
   return SEMANTICS_OK;
 }
 
