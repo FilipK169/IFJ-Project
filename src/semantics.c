@@ -1169,8 +1169,18 @@ static t_semantics_result analyze_expression(AST_EXPRESSION *expression,
   expression->conversion = CONVERSION_NONE;
 
   switch (expression->type) {
-  case EXPR_VAR_REF:
-    return analyze_var_ref(expression, table);
+  case EXPR_VAR_REF: {
+    t_semantics_result result = analyze_var_ref(expression, table);
+
+    if (result != SEMANTICS_ERR_UNDEFINED)
+      return result;
+
+    // Maybe function without parameters
+    if (ast_expression_var_ref_to_call(expression) != AST_OK)
+      return SEMANTICS_ERR_INTERNAL;
+
+    return analyze_call(expression, function, context);
+  }
 
   case EXPR_INT_LITERAL:
     expression->resolved_type = TYPE_INT;
