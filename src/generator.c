@@ -1655,6 +1655,9 @@ static int builtin_readInt(void) {
 
   printf("DEFVAR LF@input\n");
   printf("READ LF@input int\n");
+  printf("JUMPIFNEQ !readInt$valid LF@input nil@nil\n");
+  printf("MOVE LF@input int@0\n");
+  printf("LABEL !readInt$valid\n");
   printf("PUSHS LF@input\n");
 
   printf("POPFRAME\n");
@@ -1670,6 +1673,9 @@ static int builtin_readDouble(void) {
 
   printf("DEFVAR LF@input\n");
   printf("READ LF@input float\n");
+  printf("JUMPIFNEQ !readDouble$valid LF@input nil@nil\n");
+  printf("MOVE LF@input float@%a\n", 0.0);
+  printf("LABEL !readDouble$valid\n");
   printf("PUSHS LF@input\n");
 
   printf("POPFRAME\n");
