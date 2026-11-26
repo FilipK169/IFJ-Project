@@ -30,7 +30,8 @@
 // ========================================== //
 
 // 1 row of the keyword table.
-typedef struct {
+typedef struct
+{
     const char *name;
     t_token_type type;
 } t_keyword;
@@ -91,41 +92,55 @@ static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first);
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
 // ========================================== //
 
-static bool match(t_lexer *lx, int expected) {
-    if (lexer_peekc(lx) == expected) {
+static bool match(t_lexer *lx, int expected)
+{
+    if (lexer_peekc(lx) == expected)
+    {
         lexer_getc(lx);
         return true;
     }
     return false;
 }
 
-static t_lex_rc read_digits(t_lexer *lx) {
-    for (;;) {
+static t_lex_rc read_digits(t_lexer *lx)
+{
+    for (;;)
+    {
         int c = lexer_peekc(lx);
-        if (isdigit(c)) {
+        if (isdigit(c))
+        {
             lexer_getc(lx);
             LEX_TRY(strbuf_append_char(&lx->buf, (char)c));
-        } else if (c == '_') {
-            if (!isdigit(lexer_peekc2(lx))) {
+        }
+        else if (c == '_')
+        {
+            if (!isdigit(lexer_peekc2(lx)))
+            {
                 return lexer_error(lx, "misplaced '_' in number");
             }
             lexer_getc(lx); // skip the '_', the digit is read next round
-        } else {
+        }
+        else
+        {
             return LEX_OK;
         }
     }
 }
 
-static t_token_type lexer_keyword_lookup(const char *name) {
-    for (size_t i = 0; i < KEYWORD_COUNT; i++) {
-        if (strcmp(name, KEYWORDS[i].name) == 0) {
+static t_token_type lexer_keyword_lookup(const char *name)
+{
+    for (size_t i = 0; i < KEYWORD_COUNT; i++)
+    {
+        if (strcmp(name, KEYWORDS[i].name) == 0)
+        {
             return KEYWORDS[i].type;
         }
     }
     return TOKEN_ID;
 }
 
-static t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first) {
+static t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first)
+{
     // `first` is already consumed, so the token started one column back
     int line = lx->line;
     int col = lx->column - 1;
@@ -134,20 +149,25 @@ static t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first) {
     LEX_TRY(strbuf_append_char(&lx->buf, (char)first));
 
     int c = lexer_peekc(lx);
-    while (isalnum(c) || c == '_') {
+    while (isalnum(c) || c == '_')
+    {
         lexer_getc(lx);
         LEX_TRY(strbuf_append_char(&lx->buf, (char)c));
         c = lexer_peekc(lx);
     }
 
     // s"..." or s"""...""" : the identifier is exactly "s", a '"' follows
-    if (lx->buf.len == 1 && lx->buf.data[0] == 's' && lexer_peekc(lx) == '"') {
+    if (lx->buf.len == 1 && lx->buf.data[0] == 's' && lexer_peekc(lx) == '"')
+    {
         lexer_getc(lx); // the opening '"'
-        if (lexer_peekc(lx) == '"' && lexer_peekc2(lx) == '"') {
+        if (lexer_peekc(lx) == '"' && lexer_peekc2(lx) == '"')
+        {
             lexer_getc(lx); // second quote
             lexer_getc(lx); // third quote
             LEX_TRY(lexer_push_mode(lx, LEX_MODE_ISTR_MULTI));
-        } else {
+        }
+        else
+        {
             LEX_TRY(lexer_push_mode(lx, LEX_MODE_ISTR));
         }
         LEX_TRY(lexer_scan_istr_part(lx, tok));
@@ -156,17 +176,20 @@ static t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first) {
         return LEX_OK;
     }
 
-    if (lx->buf.len == 1 && lx->buf.data[0] == '_') {
+    if (lx->buf.len == 1 && lx->buf.data[0] == '_')
+    {
         return lexer_error(lx, "'_' alone is not an identifier");
     }
 
     t_token_type type = lexer_keyword_lookup(lx->buf.data);
-    if (type != TOKEN_ID) {
+    if (type != TOKEN_ID)
+    {
         return lexer_emit(lx, tok, type, line, col); // keyword: no string needed
     }
 
     char *name = strbuf_take(&lx->buf);
-    if (name == NULL) {
+    if (name == NULL)
+    {
         return LEX_ERR_INTERNAL;
     }
     lexer_emit(lx, tok, TOKEN_ID, line, col);
@@ -174,7 +197,8 @@ static t_lex_rc lexer_scan_identifier(t_lexer *lx, t_token *tok, int first) {
     return LEX_OK;
 }
 
-static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first) {
+static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first)
+{
     // `first` is already consumed (a digit or '.', never a newline)
     int line = lx->line;
     int col = lx->column - 1;
@@ -183,20 +207,27 @@ static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first) {
     strbuf_clear(&lx->buf);
     LEX_TRY(strbuf_append_char(&lx->buf, (char)first));
 
-    if (first == '.') {
+    if (first == '.')
+    {
         // caller guarantees a digit follows, so this reads the fraction
         is_double = true;
         LEX_TRY(read_digits(lx));
-    } else {
+    }
+    else
+    {
         // integer part
-        if (first != '0') {
+        if (first != '0')
+        {
             LEX_TRY(read_digits(lx));
-        } else if (isdigit(lexer_peekc(lx))) {
+        }
+        else if (isdigit(lexer_peekc(lx)))
+        {
             return lexer_error(lx, "leading zeros are not allowed");
         }
 
         // fraction: '.' only counts if a digit follows
-        if (lexer_peekc(lx) == '.' && isdigit(lexer_peekc2(lx))) {
+        if (lexer_peekc(lx) == '.' && isdigit(lexer_peekc2(lx)))
+        {
             lexer_getc(lx);
             LEX_TRY(strbuf_append_char(&lx->buf, '.'));
             is_double = true;
@@ -206,44 +237,54 @@ static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first) {
 
     // exponent: e/E, optional sign, at least one digit
     int c = lexer_peekc(lx);
-    if (c == 'e' || c == 'E') {
+    if (c == 'e' || c == 'E')
+    {
         lexer_getc(lx);
         LEX_TRY(strbuf_append_char(&lx->buf, 'e'));
         is_double = true;
 
         c = lexer_peekc(lx);
-        if (c == '+' || c == '-') {
+        if (c == '+' || c == '-')
+        {
             lexer_getc(lx);
             LEX_TRY(strbuf_append_char(&lx->buf, (char)c));
         }
-        if (!isdigit(lexer_peekc(lx))) {
+        if (!isdigit(lexer_peekc(lx)))
+        {
             return lexer_error(lx, "exponent has no digits");
         }
         LEX_TRY(read_digits(lx));
     }
 
     // optional d/D suffix, only after a fraction or exponent
-    if (is_double && (lexer_peekc(lx) == 'd' || lexer_peekc(lx) == 'D')) {
+    if (is_double && (lexer_peekc(lx) == 'd' || lexer_peekc(lx) == 'D'))
+    {
         lexer_getc(lx); // not appended, strtod would not understand it
     }
 
     // a letter, digit or '_' stuck to the number (12abc, 1.5d4)
     int next = lexer_peekc(lx);
-    if (isalnum(next) || next == '_') {
+    if (isalnum(next) || next == '_')
+    {
         return lexer_error(lx, "invalid character '%c' after number", next);
     }
 
     errno = 0;
-    if (is_double) {
+    if (is_double)
+    {
         double value = strtod(lx->buf.data, NULL);
-        if (errno == ERANGE) {
+        if (errno == ERANGE)
+        {
             return lexer_error(lx, "double literal is out of range");
         }
         lexer_emit(lx, tok, TOKEN_DOUBLE_LIT, line, col);
         tok->value.double_val = value; // set AFTER emit
-    } else {
+    }
+    else
+    {
         long long value = strtoll(lx->buf.data, NULL, 10);
-        if (errno == ERANGE) {
+        if (errno == ERANGE)
+        {
             return lexer_error(lx, "integer literal is too large");
         }
         lexer_emit(lx, tok, TOKEN_INT_LIT, line, col);
@@ -256,28 +297,37 @@ static t_lex_rc lexer_scan_number(t_lexer *lx, t_token *tok, int first) {
 // ===== DEFINITION OF LEXER-WIDE FUNCTION ==== //
 // ========================================== //
 
-t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok) {
+t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok)
+{
     int line = lx->line; // save position BEFORE consuming the first char
     int col = lx->column;
     int c = lexer_getc(lx);
 
-    switch (c) {
+    switch (c)
+    {
     case EOF:
         token_set(tok, TOKEN_EOF, line, col); // EOF does not set line_has_tokens
         return LEX_OK;
 
-    case '+': return lexer_emit(lx, tok, TOKEN_PLUS, line, col);
-    case '-': return lexer_emit(lx, tok, TOKEN_MINUS, line, col);
-    case '*': return lexer_emit(lx, tok, TOKEN_MULTIPLY, line, col);
-    case ',': return lexer_emit(lx, tok, TOKEN_COMMA, line, col);
-    case ';': return lexer_emit(lx, tok, TOKEN_SEMICOLON, line, col);
-    case ':': return lexer_emit(lx, tok, TOKEN_COLON, line, col);
+    case '+':
+        return lexer_emit(lx, tok, TOKEN_PLUS, line, col);
+    case '-':
+        return lexer_emit(lx, tok, TOKEN_MINUS, line, col);
+    case '*':
+        return lexer_emit(lx, tok, TOKEN_MULTIPLY, line, col);
+    case ',':
+        return lexer_emit(lx, tok, TOKEN_COMMA, line, col);
+    case ';':
+        return lexer_emit(lx, tok, TOKEN_SEMICOLON, line, col);
+    case ':':
+        return lexer_emit(lx, tok, TOKEN_COLON, line, col);
 
     case '(':
         lx->paren_depth++;
         return lexer_emit(lx, tok, TOKEN_LEFT_PAREN, line, col);
     case ')':
-        if (lx->paren_depth == 0) {
+        if (lx->paren_depth == 0)
+        {
             return lexer_error(lx, "unmatched ')'");
         }
         lx->paren_depth--;
@@ -293,16 +343,19 @@ t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok) {
         return lexer_emit(lx, tok, match(lx, '=') ? TOKEN_NOT_EQUAL : TOKEN_NOT, line, col);
 
     case '<':
-        if (match(lx, '=')) {
+        if (match(lx, '='))
+        {
             return lexer_emit(lx, tok, TOKEN_LESS_EQUAL, line, col);
         }
-        if (match(lx, '-')) {
+        if (match(lx, '-'))
+        {
             return lexer_emit(lx, tok, TOKEN_LEFT_ARROW, line, col);
         }
         return lexer_emit(lx, tok, TOKEN_LESS, line, col);
 
     case '&':
-        if (match(lx, '&')) {
+        if (match(lx, '&'))
+        {
             return lexer_emit(lx, tok, TOKEN_AND, line, col);
         }
         return lexer_error(lx, "unexpected '&'");
@@ -311,7 +364,8 @@ t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok) {
         return lexer_emit(lx, tok, match(lx, '|') ? TOKEN_OR : TOKEN_UNION, line, col);
 
     case '.':
-        if (isdigit(lexer_peekc(lx))) {
+        if (isdigit(lexer_peekc(lx)))
+        {
             return lexer_scan_number(lx, tok, '.');
         }
         return lexer_emit(lx, tok, TOKEN_DOT, line, col);
@@ -319,21 +373,26 @@ t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok) {
     case '/':
         return lexer_emit(lx, tok, TOKEN_DIVIDE, line, col);
 
-    case '@': {
-        for (const char *p = "main"; *p != '\0'; p++) {
-            if (!match(lx, *p)) {
+    case '@':
+    {
+        for (const char *p = "main"; *p != '\0'; p++)
+        {
+            if (!match(lx, *p))
+            {
                 return lexer_error(lx, "expected 'main' right after '@'");
             }
         }
         int next = lexer_peekc(lx);
-        if (isalnum(next) || next == '_') {
+        if (isalnum(next) || next == '_')
+        {
             return lexer_error(lx, "invalid character '%c' after '@main'", next);
         }
         return lexer_emit(lx, tok, TOKEN_ANNOT_MAIN, line, col);
     }
 
     case '"':
-        if (lexer_peekc(lx) == '"' && lexer_peekc2(lx) == '"') {
+        if (lexer_peekc(lx) == '"' && lexer_peekc2(lx) == '"')
+        {
             lexer_getc(lx); // second quote
             lexer_getc(lx); // third quote
             return lexer_scan_multiline_string(lx, tok);
@@ -341,17 +400,20 @@ t_lex_rc lexer_scan_code(t_lexer *lx, t_token *tok) {
         return lexer_scan_string(lx, tok);
 
     case '}':
-        if (lexer_mode(lx) != LEX_MODE_EXPR) {
+        if (lexer_mode(lx) != LEX_MODE_EXPR)
+        {
             return lexer_error(lx, "unexpected '}'");
         }
         LEX_TRY(lexer_pop_mode(lx)); // back to the string mode
         return lexer_emit(lx, tok, TOKEN_ISTR_EXPR_END, line, col);
 
     default:
-        if (isdigit(c)) {
+        if (isdigit(c))
+        {
             return lexer_scan_number(lx, tok, c);
         }
-        if (isalpha(c) || c == '_') {
+        if (isalpha(c) || c == '_')
+        {
             return lexer_scan_identifier(lx, tok, c);
         }
         return lexer_error(lx, "unknown character '%c'", c);

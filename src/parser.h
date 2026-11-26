@@ -35,7 +35,8 @@
  *
  * The numeric values are the compiler exit codes (same as the lexer ones).
  */
-typedef enum {
+typedef enum
+{
     PARSE_OK = 0,           // success, *out_program holds the tree
     PARSE_ERR_LEXICAL = 1,  // lexical error (reported by the lexer)
     PARSE_ERR_SYNTAX = 2,   // syntax error (message already printed)

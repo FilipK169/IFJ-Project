@@ -34,20 +34,24 @@
 #define LEX_EMPTY (-2) // marker of an empty look-ahead slot (EOF is -1)
 
 /*
-* AI use
-* Prompt: macro that evaluates an expression and returns it from the current function if it is not LEX_OK
-* @note the macro was then later adjused to the project environment
-*/
+ * AI use
+ * Prompt: macro that evaluates an expression and returns it from the current function if it is not
+ * LEX_OK
+ * @note the macro was then later adjused to the project environment
+ */
 
 /**
- * @brief Evaluates `expr` (a t_lex_rc) and returns it from the current function if it is not LEX_OK.
+ * @brief Evaluates `expr` (a t_lex_rc) and returns it from the current function if it is not
+ * LEX_OK.
  */
-#define LEX_TRY(expr)                                                          \
-    do {                                                                       \
-        t_lex_rc rc_ = (expr);                                                 \
-        if (rc_ != LEX_OK) {                                                   \
-            return rc_;                                                        \
-        }                                                                      \
+#define LEX_TRY(expr)                                                                              \
+    do                                                                                             \
+    {                                                                                              \
+        t_lex_rc rc_ = (expr);                                                                     \
+        if (rc_ != LEX_OK)                                                                         \
+        {                                                                                          \
+            return rc_;                                                                            \
+        }                                                                                          \
     } while (0)
 
 /*
@@ -60,7 +64,8 @@
 
 /**
  * AI use
- * Prompt: inline function that fills a token with type, line and column, zeroes the value, and marks the current logical line as non-empty
+ * Prompt: inline function that fills a token with type, line and column, zeroes the value, and
+ * marks the current logical line as non-empty
  * @note the function was then later adjused to the project environment
  * @note AI was mainly used to discover what inline is
  */
@@ -68,12 +73,13 @@
 /**
  * @brief Fills *tok with a token with no value and marks the current logical line as non-empty.
  *
- * Note: token_set zeroes the token, so a value (e.g. str_val) must be assigned AFTER calling this function.
- * static inline = every .c file gets its own private copy, nothing is exported.
+ * Note: token_set zeroes the token, so a value (e.g. str_val) must be assigned AFTER calling this
+ * function. static inline = every .c file gets its own private copy, nothing is exported.
  *
  * @return Always LEX_OK (so scanners can write `return lexer_emit(...);`).
  */
-static inline t_lex_rc lexer_emit(t_lexer *lx, t_token *tok, t_token_type type, int line, int col) {
+static inline t_lex_rc lexer_emit(t_lexer *lx, t_token *tok, t_token_type type, int line, int col)
+{
     token_set(tok, type, line, col);
     lx->line_has_tokens = true;
     return LEX_OK;
@@ -91,10 +97,12 @@ t_lex_rc strbuf_init(t_strbuf *sb);
 /** @brief Clears the buffer (len = 0), keeps the allocated memory. */
 void strbuf_clear(t_strbuf *sb);
 
-/** @brief Appends one character (grows the buffer when needed). @retval LEX_ERR_INTERNAL realloc failed */
+/** @brief Appends one character (grows the buffer when needed). @retval LEX_ERR_INTERNAL realloc
+ * failed */
 t_lex_rc strbuf_append_char(t_strbuf *sb, char c);
 
-/** @brief Returns a malloc'd copy of the content (caller frees), then clears the buffer. NULL on failure. */
+/** @brief Returns a malloc'd copy of the content (caller frees), then clears the buffer. NULL on
+ * failure. */
 char *strbuf_take(t_strbuf *sb);
 
 /** @brief Frees the memory owned by the buffer. */
@@ -104,8 +112,9 @@ void strbuf_free(t_strbuf *sb);
 
 /*
  * AI use
- * Prompt: error function with a variable amount of arguments that prints the error location and message according to the input format string
-*/
+ * Prompt: error function with a variable amount of arguments that prints the error location and
+ * message according to the input format string
+ */
 
 /**
  * @brief Prints "Lexical error at line:col: message" to stderr.
@@ -121,7 +130,7 @@ t_lex_rc lexer_error(t_lexer *lx, const char *fmt, ...);
 
 /*
  * END AI
-*/
+ */
 
 // ---------- lexer_chars.c: character level ---------- //
 

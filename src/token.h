@@ -27,7 +27,8 @@
 /**
  * @brief All token types the lexer can produce.
  */
-typedef enum {
+typedef enum
+{
     TOKEN_EOF,
 
     // Identifiers and literals
@@ -120,11 +121,13 @@ typedef enum {
  * The token is owned by whoever holds it (normally the parser). A token that
  * owns a string must be released with token_free().
  */
-typedef struct {
+typedef struct
+{
     t_token_type type;
     int line;   // 1-based line where the token starts
     int column; // 1-based column where the token starts
-    union {
+    union
+    {
         long long int_val;
         double double_val;
         char *str_val;

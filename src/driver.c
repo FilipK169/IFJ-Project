@@ -76,74 +76,87 @@ static int flush_output(void);
 // ==== DEFINITION OF PRIVATE FUNCTIONS ===== //
 // ========================================== //
 
-static int run_parser(FILE *in, AST_PROGRAM **out_program) {
-  *out_program = NULL;
-  int result = (int)parser_parse(in, out_program);
+static int run_parser(FILE *in, AST_PROGRAM **out_program)
+{
+    *out_program = NULL;
+    int result = (int)parser_parse(in, out_program);
 
-  if (result == DRIVER_OK && *out_program == NULL) {
-    return DRIVER_ERR_INTERNAL;
-  }
+    if (result == DRIVER_OK && *out_program == NULL)
+    {
+        return DRIVER_ERR_INTERNAL;
+    }
 
-  return result;
+    return result;
 }
 
+static int run_semantics(AST_PROGRAM *program)
+{
+    int result = (int)semantics_analyze(program);
 
-static int run_semantics(AST_PROGRAM *program) {
-  int result = (int)semantics_analyze(program);
+    if (result != SEMANTICS_OK)
+    {
+        fprintf(stderr, "Semantic error (code %d)\n", result);
+    }
 
-  if (result != SEMANTICS_OK) {
-    fprintf(stderr, "Semantic error (code %d)\n", result);
-  }
-
-  return result;
+    return result;
 }
 
-static int run_generator(AST_PROGRAM *program) {
-  if (generate_code(program) != 0) {
-    fprintf(stderr, "Code generation error\n");
-    return DRIVER_ERR_INTERNAL;
-  }
+static int run_generator(AST_PROGRAM *program)
+{
+    if (generate_code(program) != 0)
+    {
+        fprintf(stderr, "Code generation error\n");
+        return DRIVER_ERR_INTERNAL;
+    }
 
-  return DRIVER_OK;
+    return DRIVER_OK;
 }
 
-static int flush_output(void) {
-  if (fflush(stdout) != 0 || ferror(stdout)) {
-    fprintf(stderr, "Output write error\n");
-    return DRIVER_ERR_INTERNAL;
-  }
+static int flush_output(void)
+{
+    if (fflush(stdout) != 0 || ferror(stdout))
+    {
+        fprintf(stderr, "Output write error\n");
+        return DRIVER_ERR_INTERNAL;
+    }
 
-  return DRIVER_OK;
+    return DRIVER_OK;
 }
 
 // ========================================== //
 // ===== DEFINITION OF PUBLIC FUNCTIONS ===== //
 // ========================================== //
 
-int driver_run(FILE *in) {
-  if (in == NULL) {
-    return DRIVER_ERR_INTERNAL;
-  }
+int driver_run(FILE *in)
+{
+    if (in == NULL)
+    {
+        return DRIVER_ERR_INTERNAL;
+    }
 
-  AST_PROGRAM *program = NULL;
-  int result = run_parser(in, &program);
+    AST_PROGRAM *program = NULL;
+    int result = run_parser(in, &program);
 
-  if (result == DRIVER_OK) {
-    result = run_semantics(program);
-  }
+    if (result == DRIVER_OK)
+    {
+        result = run_semantics(program);
+    }
 
-  if (result == DRIVER_OK) {
-    result = run_generator(program);
-  }
+    if (result == DRIVER_OK)
+    {
+        result = run_generator(program);
+    }
 
-  if (result == DRIVER_OK) {
-    result = flush_output();
-  }
+    if (result == DRIVER_OK)
+    {
+        result = flush_output();
+    }
 
-  ast_program_destroy(program);
-  return result;
+    ast_program_destroy(program);
+    return result;
 }
 
-int main(void) {
-  return driver_run(stdin);
+int main(void)
+{
+    return driver_run(stdin);
 }

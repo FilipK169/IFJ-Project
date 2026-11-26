@@ -19,7 +19,7 @@
 // ========================================== //
 
 // Hlavičkové soubory projektu:
-//#include "other_file.h"
+// #include "other_file.h"
 
 // Standardní knihovny:
 #include <stdbool.h>
@@ -41,16 +41,22 @@ typedef unsigned int t_data_id;
 // ================ ENUMS =================== //
 // ========================================== //
 
-typedef enum { TEMPLATE_OK, TEMPLATE_INVALID_PAR, TEMPLATE_INTERNAL_ERROR } t_return_result;
+typedef enum
+{
+    TEMPLATE_OK,
+    TEMPLATE_INVALID_PAR,
+    TEMPLATE_INTERNAL_ERROR
+} t_return_result;
 
 // ========================================== //
 // ============== STRUCTURES ================ //
 // ========================================== //
 
-typedef struct {
-  t_data_id id;
-  char buffer[PUBLIC_BUFFER_SIZE];
-  t_public_callback callback;
+typedef struct
+{
+    t_data_id id;
+    char buffer[PUBLIC_BUFFER_SIZE];
+    t_public_callback callback;
 } t_data;
 
 /*

@@ -28,7 +28,8 @@
 // ===== DEFINITION OF PUBLIC FUNCTIONS ===== //
 // ========================================== //
 
-t_lex_rc lexer_init(t_lexer *lx, FILE *in) {
+t_lex_rc lexer_init(t_lexer *lx, FILE *in)
+{
     lx->in = in;
 
     lx->line = 1;
@@ -50,25 +51,31 @@ t_lex_rc lexer_init(t_lexer *lx, FILE *in) {
     return strbuf_init(&lx->buf); // only failable step
 }
 
-void lexer_destroy(t_lexer *lx) {
+void lexer_destroy(t_lexer *lx)
+{
     strbuf_free(&lx->buf); // whoever opened lx->in is responsible for closing it, not the lexer
 }
 
-t_lex_mode lexer_mode(const t_lexer *lx) {
+t_lex_mode lexer_mode(const t_lexer *lx)
+{
     return lx->modes[lx->mode_top];
 }
 
-t_lex_rc lexer_next(t_lexer *lx, t_token *tok) {
+t_lex_rc lexer_next(t_lexer *lx, t_token *tok)
+{
     token_free(tok); // drop the previous token's string
 
-    for (;;) {
+    for (;;)
+    {
         // 1. queued layout tokens come first
-        if (lx->pending_dedents > 0) {
+        if (lx->pending_dedents > 0)
+        {
             lx->pending_dedents--;
             token_set(tok, TOKEN_DEDENT, lx->line, lx->column);
             return LEX_OK;
         }
-        if (lx->pending_indent) {
+        if (lx->pending_indent)
+        {
             lx->pending_indent = false;
             token_set(tok, TOKEN_INDENT, lx->line, lx->column);
             return LEX_OK;
@@ -76,14 +83,14 @@ t_lex_rc lexer_next(t_lexer *lx, t_token *tok) {
 
         // 2. inside s"..." strings
         t_lex_mode mode = lexer_mode(lx);
-        if (mode == LEX_MODE_ISTR || mode == LEX_MODE_ISTR_MULTI ||
-            mode == LEX_MODE_DOLLAR) {
+        if (mode == LEX_MODE_ISTR || mode == LEX_MODE_ISTR_MULTI || mode == LEX_MODE_DOLLAR)
+        {
             return lexer_scan_istr_part(lx, tok);
         }
 
         // 3. start of a logical line: work out indentation
-        if (lx->at_line_start && lx->paren_depth == 0 &&
-            mode == LEX_MODE_CODE) {
+        if (lx->at_line_start && lx->paren_depth == 0 && mode == LEX_MODE_CODE)
+        {
             LEX_TRY(lexer_handle_indentation(lx));
             continue; // it may have queued INDENT / DEDENTs
         }
@@ -95,10 +102,11 @@ t_lex_rc lexer_next(t_lexer *lx, t_token *tok) {
         bool layout = (lx->paren_depth == 0 && mode == LEX_MODE_CODE);
 
         // a block comment containing a newline acts as an EOL
-        if (had_eol && lx->line_has_tokens && layout) {
-            if (c != '\n' && c != EOF) {
-                return lexer_error(lx,
-                    "token after a multi-line comment on the same line");
+        if (had_eol && lx->line_has_tokens && layout)
+        {
+            if (c != '\n' && c != EOF)
+            {
+                return lexer_error(lx, "token after a multi-line comment on the same line");
             }
             lx->line_has_tokens = false;
             lx->at_line_start = true;
@@ -107,11 +115,13 @@ t_lex_rc lexer_next(t_lexer *lx, t_token *tok) {
         }
 
         // newline
-        if (c == '\n') {
+        if (c == '\n')
+        {
             int line = lx->line;
             int col = lx->column;
             lexer_getc(lx);
-            if (lx->line_has_tokens && layout) {
+            if (lx->line_has_tokens && layout)
+            {
                 lx->line_has_tokens = false;
                 lx->at_line_start = true;
                 token_set(tok, TOKEN_EOL, line, col);
@@ -121,16 +131,20 @@ t_lex_rc lexer_next(t_lexer *lx, t_token *tok) {
         }
 
         // end of file: EOL, then one DEDENT per open block, then EOF
-        if (c == EOF) {
-            if (mode != LEX_MODE_CODE) {
+        if (c == EOF)
+        {
+            if (mode != LEX_MODE_CODE)
+            {
                 return lexer_error(lx, "unexpected end of file in ${ ... }");
             }
-            if (lx->line_has_tokens) {
+            if (lx->line_has_tokens)
+            {
                 lx->line_has_tokens = false;
                 token_set(tok, TOKEN_EOL, lx->line, lx->column);
                 return LEX_OK;
             }
-            if (lx->indent_top > 0) {
+            if (lx->indent_top > 0)
+            {
                 lx->indent_top--;
                 token_set(tok, TOKEN_DEDENT, lx->line, lx->column);
                 return LEX_OK;

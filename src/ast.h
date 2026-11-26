@@ -28,7 +28,7 @@
 // ======== CONSTANTS AND TYPEDEFS ========== //
 // ========================================== //
 
-#define AST_INITIAL_CAPACITY 4 
+#define AST_INITIAL_CAPACITY 4
 
 /** Predeclarations */
 typedef struct AST_EXPRESSION AST_EXPRESSION;
@@ -41,103 +41,104 @@ typedef struct AST_FUNCTION_DEF AST_FUNCTION_DEF;
 // ========================================== //
 
 /** @brief Return code of AST module. */
-typedef enum {
-  AST_OK,             /**< Success. */
-  AST_INVALID_PARAM,    /**< Invalid parameter. */
-  AST_INTERNAL_ERROR  /**< Failed memory allocation. */
+typedef enum
+{
+    AST_OK,            /**< Success. */
+    AST_INVALID_PARAM, /**< Invalid parameter. */
+    AST_INTERNAL_ERROR /**< Failed memory allocation. */
 } t_ast_result;
 
-
 /** @brief Data types of IFJ26. */
-typedef enum {
-  TYPE_UNSPECIFIED, 
-  TYPE_INT,
-  TYPE_DOUBLE,
-  TYPE_STRING,
-  TYPE_BOOLEAN,
-  TYPE_UNIT,
-  TYPE_ANY
+typedef enum
+{
+    TYPE_UNSPECIFIED,
+    TYPE_INT,
+    TYPE_DOUBLE,
+    TYPE_STRING,
+    TYPE_BOOLEAN,
+    TYPE_UNIT,
+    TYPE_ANY
 } ENUM_DATA_TYPE;
 
-
 /** @brief Implicit conversion added by semantics. */
-typedef enum { 
-  CONVERSION_NONE, 
-  CONVERSION_INT_TO_DOUBLE 
+typedef enum
+{
+    CONVERSION_NONE,
+    CONVERSION_INT_TO_DOUBLE
 } ENUM_CONVERSION;
 
-
 /** @brief Statement type. */
-typedef enum {
-  STMT_VAR_DECL,
-  STMT_ASSIGNMENT,
-  STMT_RETURN,
-  STMT_IF,
-  STMT_WHILE,
-  STMT_FOR, 
-  STMT_EXPR
+typedef enum
+{
+    STMT_VAR_DECL,
+    STMT_ASSIGNMENT,
+    STMT_RETURN,
+    STMT_IF,
+    STMT_WHILE,
+    STMT_FOR,
+    STMT_EXPR
 } ENUM_STATEMENT_TYPE;
 
-
 /** @brief EXPRESSION type. */
-typedef enum {
-  EXPR_VAR_REF,
-  EXPR_INT_LITERAL,
-  EXPR_DOUBLE_LITERAL,
-  EXPR_STRING_LITERAL,
-  EXPR_UNIT_LITERAL,
-  EXPR_UNARY,
-  EXPR_BINARY,
-  EXPR_BOOL_LITERAL,  
-  EXPR_CALL,          
-  EXPR_MEMBER,       
-  EXPR_INTERPOLATED,
-  EXPR_IF        
+typedef enum
+{
+    EXPR_VAR_REF,
+    EXPR_INT_LITERAL,
+    EXPR_DOUBLE_LITERAL,
+    EXPR_STRING_LITERAL,
+    EXPR_UNIT_LITERAL,
+    EXPR_UNARY,
+    EXPR_BINARY,
+    EXPR_BOOL_LITERAL,
+    EXPR_CALL,
+    EXPR_MEMBER,
+    EXPR_INTERPOLATED,
+    EXPR_IF
 } ENUM_EXPRESSION_TYPE;
 
-
 /** @brief Unary operators. */
-typedef enum { 
-  UNARY_PLUS, 
-  UNARY_MINUS, 
-  UNARY_NOT 
+typedef enum
+{
+    UNARY_PLUS,
+    UNARY_MINUS,
+    UNARY_NOT
 } ENUM_UNARY_OPERATOR;
 
-
 /** @brief Binary operators. */
-typedef enum {
-  BINARY_ADD, 
-  BINARY_SUB, 
-  BINARY_MUL, 
-  BINARY_DIV,
-  BINARY_LT, 
-  BINARY_GT, 
-  BINARY_LE, 
-  BINARY_GE, 
-  BINARY_EQ, 
-  BINARY_NE,
-  BINARY_AND, 
-  BINARY_OR 
+typedef enum
+{
+    BINARY_ADD,
+    BINARY_SUB,
+    BINARY_MUL,
+    BINARY_DIV,
+    BINARY_LT,
+    BINARY_GT,
+    BINARY_LE,
+    BINARY_GE,
+    BINARY_EQ,
+    BINARY_NE,
+    BINARY_AND,
+    BINARY_OR
 } ENUM_BINARY_OPERATOR;
 
-
 /** @brief Callee function kind. */
-typedef enum { 
-  CALLEE_UNKNOWN, 
-  CALLEE_USER_FUNCTION, 
-  CALLEE_BUILTIN, 
-  CALLEE_EXTENSION 
+typedef enum
+{
+    CALLEE_UNKNOWN,
+    CALLEE_USER_FUNCTION,
+    CALLEE_BUILTIN,
+    CALLEE_EXTENSION
 } ENUM_CALLEE_KIND;
 
-
 /** @brief Member kind. */
-typedef enum {
-  MEMBER_UNKNOWN,
-  MEMBER_TO_STRING,   
-  MEMBER_TO_INT,     
-  MEMBER_FLOOR,       
-  MEMBER_LENGTH,      
-  MEMBER_EXT_PROPERTY 
+typedef enum
+{
+    MEMBER_UNKNOWN,
+    MEMBER_TO_STRING,
+    MEMBER_TO_INT,
+    MEMBER_FLOOR,
+    MEMBER_LENGTH,
+    MEMBER_EXT_PROPERTY
 } ENUM_MEMBER_KIND;
 
 // ========================================== //
@@ -145,220 +146,224 @@ typedef enum {
 // ========================================== //
 
 /** @brief Position in source code. */
-typedef struct {
-  size_t line;
-  size_t column;
+typedef struct
+{
+    size_t line;
+    size_t column;
 } SOURCE_LOCATION;
 
-
 /** @brief Function parameter. */
-typedef struct {
-  char *name;
-  size_t variable_id;   /**< Semantics fill */
-  SOURCE_LOCATION location;
-  ENUM_DATA_TYPE type;
+typedef struct
+{
+    char *name;
+    size_t variable_id; /**< Semantics fill */
+    SOURCE_LOCATION location;
+    ENUM_DATA_TYPE type;
 } AST_PARAMETER;
 
-
 /** @brief One list of parameters; count == 0 => (). */
-typedef struct {
-  AST_PARAMETER *parameters;
-  size_t parameter_count;
-  size_t parameter_capacity;
+typedef struct
+{
+    AST_PARAMETER *parameters;
+    size_t parameter_count;
+    size_t parameter_capacity;
 } AST_PARAM_LIST;
 
-
 /** @brief One list of arguments in parentheses; count == 0 => (). */
-typedef struct {
-  AST_EXPRESSION **arguments;
-  size_t argument_count;
-  size_t argument_capacity;
+typedef struct
+{
+    AST_EXPRESSION **arguments;
+    size_t argument_count;
+    size_t argument_capacity;
 } AST_ARG_LIST;
 
-
 /** @brief Block of statements. */
-struct AST_BLOCK {
-  AST_STATEMENT **statements;
-  size_t statement_count;
-  size_t statement_capacity;
-  ENUM_DATA_TYPE resolved_type; /**< Semantics fill */
+struct AST_BLOCK
+{
+    AST_STATEMENT **statements;
+    size_t statement_count;
+    size_t statement_capacity;
+    ENUM_DATA_TYPE resolved_type; /**< Semantics fill */
 };
-
 
 /** @brief Function definition. */
-struct AST_FUNCTION_DEF {
-  char *name;
-  size_t function_id; /**< Semantics fill */
-  bool is_main;
-  SOURCE_LOCATION location;
-  AST_PARAM_LIST *param_lists;
-  size_t param_list_count;
-  size_t param_list_capacity;
-  AST_PARAMETER *receiver;              /**< NULL = common function */
-  ENUM_DATA_TYPE declared_return_type;  /**< TYPE_UNSPECIFIED if not written */
-  ENUM_DATA_TYPE resolved_return_type;  /**< Semantics fill */
-  AST_BLOCK *body;
+struct AST_FUNCTION_DEF
+{
+    char *name;
+    size_t function_id; /**< Semantics fill */
+    bool is_main;
+    SOURCE_LOCATION location;
+    AST_PARAM_LIST *param_lists;
+    size_t param_list_count;
+    size_t param_list_capacity;
+    AST_PARAMETER *receiver;             /**< NULL = common function */
+    ENUM_DATA_TYPE declared_return_type; /**< TYPE_UNSPECIFIED if not written */
+    ENUM_DATA_TYPE resolved_return_type; /**< Semantics fill */
+    AST_BLOCK *body;
 };
 
-
 /** @brief Whole program. */
-typedef struct {
-  AST_FUNCTION_DEF **functions;
-  size_t function_count;
-  size_t function_capacity;
+typedef struct
+{
+    AST_FUNCTION_DEF **functions;
+    size_t function_count;
+    size_t function_capacity;
 } AST_PROGRAM;
 
 // ---------- Statements ---------- //
 
-typedef struct {
-  char *name;
-  size_t variable_id;
-  bool is_mutable; /**< val = false, var = true. */
-  ENUM_DATA_TYPE declared_type;
-  ENUM_DATA_TYPE resolved_type;
-  AST_EXPRESSION *initializer;
+typedef struct
+{
+    char *name;
+    size_t variable_id;
+    bool is_mutable; /**< val = false, var = true. */
+    ENUM_DATA_TYPE declared_type;
+    ENUM_DATA_TYPE resolved_type;
+    AST_EXPRESSION *initializer;
 } AST_VAR_DECL;
 
-
-typedef struct {
-  char *name;
-  size_t variable_id; /**< Semantics fill */
-  AST_EXPRESSION *value;
+typedef struct
+{
+    char *name;
+    size_t variable_id; /**< Semantics fill */
+    AST_EXPRESSION *value;
 } AST_ASSIGNMENT;
 
-
-typedef struct {
-  AST_EXPRESSION *value; 
+typedef struct
+{
+    AST_EXPRESSION *value;
 } AST_RETURN;
 
-
-typedef struct {
-  AST_EXPRESSION *condition;
-  AST_BLOCK *then_block;
-  AST_BLOCK *else_block;        
-  ENUM_DATA_TYPE resolved_type; /**<  Semantics fill */
+typedef struct
+{
+    AST_EXPRESSION *condition;
+    AST_BLOCK *then_block;
+    AST_BLOCK *else_block;
+    ENUM_DATA_TYPE resolved_type; /**<  Semantics fill */
 } AST_IF;
 
-
-typedef struct {
-  AST_EXPRESSION *condition;
-  AST_BLOCK *body;
+typedef struct
+{
+    AST_EXPRESSION *condition;
+    AST_BLOCK *body;
 } AST_WHILE;
 
-
-typedef struct { 
-  char *var_name;
-  size_t variable_id;
-  bool is_exclusive; /**< true = until, false = to. */
-  AST_EXPRESSION *from;
-  AST_EXPRESSION *to;
-  AST_EXPRESSION *step; 
-  AST_EXPRESSION **guards;
-  size_t guard_count;
-  size_t guard_capacity;
-  AST_BLOCK *body;
+typedef struct
+{
+    char *var_name;
+    size_t variable_id;
+    bool is_exclusive; /**< true = until, false = to. */
+    AST_EXPRESSION *from;
+    AST_EXPRESSION *to;
+    AST_EXPRESSION *step;
+    AST_EXPRESSION **guards;
+    size_t guard_count;
+    size_t guard_capacity;
+    AST_BLOCK *body;
 } AST_FOR;
 
-
-typedef struct {
-  AST_EXPRESSION *expression;
+typedef struct
+{
+    AST_EXPRESSION *expression;
 } AST_EXPR_STMT;
 
-
-struct AST_STATEMENT {
-  ENUM_STATEMENT_TYPE type;
-  SOURCE_LOCATION location;
-  union {
-    AST_VAR_DECL var_decl;
-    AST_ASSIGNMENT assignment;
-    AST_RETURN return_stmt;
-    AST_IF if_stmt;
-    AST_WHILE while_stmt;
-    AST_FOR for_stmt;
-    AST_EXPR_STMT expr_stmt;
-  } data;
+struct AST_STATEMENT
+{
+    ENUM_STATEMENT_TYPE type;
+    SOURCE_LOCATION location;
+    union
+    {
+        AST_VAR_DECL var_decl;
+        AST_ASSIGNMENT assignment;
+        AST_RETURN return_stmt;
+        AST_IF if_stmt;
+        AST_WHILE while_stmt;
+        AST_FOR for_stmt;
+        AST_EXPR_STMT expr_stmt;
+    } data;
 };
 
 // ---------- Expressions ---------- //
 
-typedef struct {
-  char *name;
-  size_t variable_id;
+typedef struct
+{
+    char *name;
+    size_t variable_id;
 } AST_VAR_REF;
 
-
-typedef struct {
-  char *value;
-  size_t length;
+typedef struct
+{
+    char *value;
+    size_t length;
 } AST_STRING_LITERAL;
 
-
-typedef struct {
-  ENUM_UNARY_OPERATOR op;
-  AST_EXPRESSION *operand;
+typedef struct
+{
+    ENUM_UNARY_OPERATOR op;
+    AST_EXPRESSION *operand;
 } AST_UNARY_EXPRESSION;
 
-
-typedef struct {
-  ENUM_BINARY_OPERATOR op;
-  AST_EXPRESSION *left;
-  AST_EXPRESSION *right;
+typedef struct
+{
+    ENUM_BINARY_OPERATOR op;
+    AST_EXPRESSION *left;
+    AST_EXPRESSION *right;
 } AST_BINARY_EXPRESSION;
 
-
-typedef struct {
-  ENUM_CALLEE_KIND callee_kind;
-  char *name;
-  AST_EXPRESSION *receiver;     
-  AST_ARG_LIST *argument_lists; 
-  size_t argument_list_count;   
-  size_t argument_list_capacity;
-  size_t function_id;
+typedef struct
+{
+    ENUM_CALLEE_KIND callee_kind;
+    char *name;
+    AST_EXPRESSION *receiver;
+    AST_ARG_LIST *argument_lists;
+    size_t argument_list_count;
+    size_t argument_list_capacity;
+    size_t function_id;
 } AST_CALL;
 
-
-typedef struct {
-  AST_EXPRESSION *receiver;
-  char *member_name;
-  ENUM_MEMBER_KIND member_kind;
-  size_t function_id;
+typedef struct
+{
+    AST_EXPRESSION *receiver;
+    char *member_name;
+    ENUM_MEMBER_KIND member_kind;
+    size_t function_id;
 } AST_MEMBER;
 
-
-typedef struct {
-  bool is_literal;
-  char *text;                  
-  AST_EXPRESSION *expression;  
+typedef struct
+{
+    bool is_literal;
+    char *text;
+    AST_EXPRESSION *expression;
 } AST_INTERP_PART;
 
-
-typedef struct {
-  AST_INTERP_PART *parts;
-  size_t part_count;
-  size_t part_capacity;
+typedef struct
+{
+    AST_INTERP_PART *parts;
+    size_t part_count;
+    size_t part_capacity;
 } AST_INTERPOLATED;
 
-
-struct AST_EXPRESSION {
-  ENUM_EXPRESSION_TYPE type;
-  ENUM_DATA_TYPE resolved_type; /**< Semantics fill */
-  ENUM_CONVERSION conversion;   /**< Semantics fill */
-  SOURCE_LOCATION location;
-  union {
-    AST_VAR_REF var_ref;
-    int64_t int_literal;
-    double double_literal;
-    AST_STRING_LITERAL string_literal;
-    AST_UNARY_EXPRESSION unary;
-    AST_BINARY_EXPRESSION binary;
-    bool bool_literal;
-    AST_CALL call;
-    AST_MEMBER member;
-    AST_INTERPOLATED interpolated;
-    AST_IF if_expr;
-  } data;
+struct AST_EXPRESSION
+{
+    ENUM_EXPRESSION_TYPE type;
+    ENUM_DATA_TYPE resolved_type; /**< Semantics fill */
+    ENUM_CONVERSION conversion;   /**< Semantics fill */
+    SOURCE_LOCATION location;
+    union
+    {
+        AST_VAR_REF var_ref;
+        int64_t int_literal;
+        double double_literal;
+        AST_STRING_LITERAL string_literal;
+        AST_UNARY_EXPRESSION unary;
+        AST_BINARY_EXPRESSION binary;
+        bool bool_literal;
+        AST_CALL call;
+        AST_MEMBER member;
+        AST_INTERPOLATED interpolated;
+        AST_IF if_expr;
+    } data;
 };
-
 
 // ========================================== //
 // ===== DECLARATION OF PUBLIC FUNCTIONS ==== //
