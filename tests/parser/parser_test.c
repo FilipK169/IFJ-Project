@@ -7,8 +7,10 @@ static void dump_expr(const AST_EXPRESSION *e);
 static void dump_block(const AST_BLOCK *b);
 
 /** Name of a data type. "?" means the type is not written. */
-static const char *type_name(ENUM_DATA_TYPE t) {
-    switch (t) {
+static const char *type_name(ENUM_DATA_TYPE t)
+{
+    switch (t)
+    {
     case TYPE_INT:
         return "Int";
     case TYPE_DOUBLE:
@@ -25,19 +27,24 @@ static const char *type_name(ENUM_DATA_TYPE t) {
 }
 
 /** Prints the condition and the branches of an if. */
-static void dump_if(const AST_IF *n, bool is_statement) {
+static void dump_if(const AST_IF *n, bool is_statement)
+{
     dump_expr(n->condition);
     dump_block(n->then_block);
-    if (n->else_block != NULL || !is_statement) {
+    if (n->else_block != NULL || !is_statement)
+    {
         dump_block(n->else_block);
     }
 }
 
-static void dump_expr(const AST_EXPRESSION *e) {
-    if (e == NULL) {
+static void dump_expr(const AST_EXPRESSION *e)
+{
+    if (e == NULL)
+    {
         return;
     }
-    switch (e->type) {
+    switch (e->type)
+    {
     case EXPR_VAR_REF:
         printf("var %s ", e->data.var_ref.name);
         break;
@@ -65,17 +72,21 @@ static void dump_expr(const AST_EXPRESSION *e) {
         dump_expr(e->data.binary.left);
         dump_expr(e->data.binary.right);
         break;
-    case EXPR_CALL: {
+    case EXPR_CALL:
+    {
         const AST_CALL *c = &e->data.call;
         printf("call %s (%zu list%s) ", c->name, c->argument_list_count,
                c->argument_list_count == 1 ? "" : "s");
-        if (c->receiver != NULL) {
+        if (c->receiver != NULL)
+        {
             printf("receiver: ");
             dump_expr(c->receiver);
         }
-        for (size_t i = 0; i < c->argument_list_count; i++) {
+        for (size_t i = 0; i < c->argument_list_count; i++)
+        {
             printf("args[%zu]: ", i);
-            for (size_t j = 0; j < c->argument_lists[i].argument_count; j++) {
+            for (size_t j = 0; j < c->argument_lists[i].argument_count; j++)
+            {
                 dump_expr(c->argument_lists[i].arguments[j]);
             }
         }
@@ -85,13 +96,18 @@ static void dump_expr(const AST_EXPRESSION *e) {
         printf("member .%s ", e->data.member.member_name);
         dump_expr(e->data.member.receiver);
         break;
-    case EXPR_INTERPOLATED: {
+    case EXPR_INTERPOLATED:
+    {
         const AST_INTERPOLATED *s = &e->data.interpolated;
         printf("interpolated ");
-        for (size_t i = 0; i < s->part_count; i++) {
-            if (s->parts[i].is_literal) {
+        for (size_t i = 0; i < s->part_count; i++)
+        {
+            if (s->parts[i].is_literal)
+            {
                 printf("text \"%s\" ", s->parts[i].text);
-            } else {
+            }
+            else
+            {
                 dump_expr(s->parts[i].expression);
             }
         }
@@ -104,12 +120,14 @@ static void dump_expr(const AST_EXPRESSION *e) {
     }
 }
 
-static void dump_stmt(const AST_STATEMENT *s) {
-    switch (s->type) {
-    case STMT_VAR_DECL: {
+static void dump_stmt(const AST_STATEMENT *s)
+{
+    switch (s->type)
+    {
+    case STMT_VAR_DECL:
+    {
         const AST_VAR_DECL *d = &s->data.var_decl;
-        printf("%s %s : %s ", d->is_mutable ? "var" : "val", d->name,
-               type_name(d->declared_type));
+        printf("%s %s : %s ", d->is_mutable ? "var" : "val", d->name, type_name(d->declared_type));
         dump_expr(d->initializer);
         break;
     }
@@ -130,16 +148,19 @@ static void dump_stmt(const AST_STATEMENT *s) {
         dump_expr(s->data.while_stmt.condition);
         dump_block(s->data.while_stmt.body);
         break;
-    case STMT_FOR: {
+    case STMT_FOR:
+    {
         const AST_FOR *f = &s->data.for_stmt;
         printf("for %s %s ", f->var_name, f->is_exclusive ? "until" : "to");
         dump_expr(f->from);
         dump_expr(f->to);
-        if (f->step != NULL) {
+        if (f->step != NULL)
+        {
             printf("by: ");
             dump_expr(f->step);
         }
-        for (size_t i = 0; i < f->guard_count; i++) {
+        for (size_t i = 0; i < f->guard_count; i++)
+        {
             printf("guard: ");
             dump_expr(f->guards[i]);
         }
@@ -153,29 +174,37 @@ static void dump_stmt(const AST_STATEMENT *s) {
     }
 }
 
-static void dump_block(const AST_BLOCK *b) {
+static void dump_block(const AST_BLOCK *b)
+{
     printf("block ");
-    if (b == NULL) {
+    if (b == NULL)
+    {
         return;
     }
-    for (size_t i = 0; i < b->statement_count; i++) {
+    for (size_t i = 0; i < b->statement_count; i++)
+    {
         dump_stmt(b->statements[i]);
     }
 }
 
-static void dump_function(const AST_FUNCTION_DEF *f) {
+static void dump_function(const AST_FUNCTION_DEF *f)
+{
     printf("def %s ", f->name);
-    if (f->is_main) {
+    if (f->is_main)
+    {
         printf("@main ");
     }
-    if (f->receiver != NULL) {
+    if (f->receiver != NULL)
+    {
         printf("receiver(%s: %s) ", f->receiver->name, type_name(f->receiver->type));
     }
     printf("lists=%zu ", f->param_list_count);
-    for (size_t i = 0; i < f->param_list_count; i++) {
+    for (size_t i = 0; i < f->param_list_count; i++)
+    {
         const AST_PARAM_LIST *l = &f->param_lists[i];
         printf("[");
-        for (size_t j = 0; j < l->parameter_count; j++) {
+        for (size_t j = 0; j < l->parameter_count; j++)
+        {
             printf("%s%s:%s", j > 0 ? "," : "", l->parameters[j].name,
                    type_name(l->parameters[j].type));
         }
@@ -186,16 +215,20 @@ static void dump_function(const AST_FUNCTION_DEF *f) {
     printf("\n");
 }
 
-static void dump_program(const AST_PROGRAM *p) {
-    for (size_t i = 0; i < p->function_count; i++) {
+static void dump_program(const AST_PROGRAM *p)
+{
+    for (size_t i = 0; i < p->function_count; i++)
+    {
         dump_function(p->functions[i]);
     }
 }
 
-int main(void) {
+int main(void)
+{
     AST_PROGRAM *program = NULL;
     t_parse_rc rc = parser_parse(stdin, &program);
-    if (rc != PARSE_OK) {
+    if (rc != PARSE_OK)
+    {
         return (int)rc;
     }
     dump_program(program);

@@ -1,7 +1,7 @@
 /**
  * @file driver.h
  * @brief Driver module of IFJ26 compiler.
- * 
+ *
  * Runs whole compiler.
  *
  * Project: Implementace překladače jazyka IFJ26.
@@ -29,11 +29,12 @@
 /**
  * @brief Return codes of compiler
  */
-typedef enum {
-  DRIVER_OK = 0,            /**< Succes */
-  DRIVER_ERR_LEXICAL = 1,   /**< Lexical error */
-  DRIVER_ERR_SYNTAX = 2,    /**< Syntax error */
-  DRIVER_ERR_INTERNAL = 99  /**< Internal driver error */
+typedef enum
+{
+    DRIVER_OK = 0,           /**< Succes */
+    DRIVER_ERR_LEXICAL = 1,  /**< Lexical error */
+    DRIVER_ERR_SYNTAX = 2,   /**< Syntax error */
+    DRIVER_ERR_INTERNAL = 99 /**< Internal driver error */
 } t_driver_result;
 
 // ========================================== //

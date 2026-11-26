@@ -31,17 +31,18 @@
  * Numeric values correspond directly to the IFJ26 compiler
  * semantic error exit codes.
  */
-typedef enum {
-  SEMANTICS_OK = 0,
+typedef enum
+{
+    SEMANTICS_OK = 0,
 
-  SEMANTICS_ERR_UNDEFINED = 3,
-  SEMANTICS_ERR_REDEFINITION = 4,
-  SEMANTICS_ERR_FUNCTION_ARGS = 5,
-  SEMANTICS_ERR_TYPE = 6,
-  SEMANTICS_ERR_IMMUTABLE = 7,
-  SEMANTICS_ERR_OTHER = 10,
+    SEMANTICS_ERR_UNDEFINED = 3,
+    SEMANTICS_ERR_REDEFINITION = 4,
+    SEMANTICS_ERR_FUNCTION_ARGS = 5,
+    SEMANTICS_ERR_TYPE = 6,
+    SEMANTICS_ERR_IMMUTABLE = 7,
+    SEMANTICS_ERR_OTHER = 10,
 
-  SEMANTICS_ERR_INTERNAL = 99
+    SEMANTICS_ERR_INTERNAL = 99
 } t_semantics_result;
 
 // ========================================== //

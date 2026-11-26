@@ -39,69 +39,77 @@ typedef struct t_scope t_scope;
 // ================ ENUMS =================== //
 // ========================================== //
 
-typedef enum {
-  SYMTABLE_OK = 0,
-  SYMTABLE_ERR_ALLOC,
-  SYMTABLE_ERR_DUPLICATE,
-  SYMTABLE_ERR_NOT_FOUND,
-  SYMTABLE_ERR_NO_SCOPE,
-  SYMTABLE_ERR_INVALID_ARGUMENT
+typedef enum
+{
+    SYMTABLE_OK = 0,
+    SYMTABLE_ERR_ALLOC,
+    SYMTABLE_ERR_DUPLICATE,
+    SYMTABLE_ERR_NOT_FOUND,
+    SYMTABLE_ERR_NO_SCOPE,
+    SYMTABLE_ERR_INVALID_ARGUMENT
 } t_symtable_result;
 
-typedef enum {
-  FUNCTION_USER,
-  FUNCTION_BUILTIN,
-  FUNCTION_EXTENSION
+typedef enum
+{
+    FUNCTION_USER,
+    FUNCTION_BUILTIN,
+    FUNCTION_EXTENSION
 } t_function_kind;
 
 // ========================================== //
 // ============== STRUCTURES ================ //
 // ========================================== //
 
-typedef struct {
-  char *name;
+typedef struct
+{
+    char *name;
 
-  ENUM_DATA_TYPE type;
+    ENUM_DATA_TYPE type;
 
-  bool is_mutable;
-  bool is_parameter;
+    bool is_mutable;
+    bool is_parameter;
 } t_variable_symbol;
 
-typedef struct {
-  ENUM_DATA_TYPE *types;
-  size_t count;
+typedef struct
+{
+    ENUM_DATA_TYPE *types;
+    size_t count;
 } t_function_parameter_list;
 
-typedef struct {
-  char *name;
+typedef struct
+{
+    char *name;
 
-  t_function_kind kind;
+    t_function_kind kind;
 
-  ENUM_DATA_TYPE return_type;
+    ENUM_DATA_TYPE return_type;
 
-  t_function_parameter_list *parameter_lists;
-  size_t parameter_list_count;
+    t_function_parameter_list *parameter_lists;
+    size_t parameter_list_count;
 
-  ENUM_DATA_TYPE receiver_type;
+    ENUM_DATA_TYPE receiver_type;
 
-  bool is_main;
+    bool is_main;
 } t_function_symbol;
 
-typedef struct {
-  t_variable_symbol *items;
-  size_t count;
-  size_t capacity;
+typedef struct
+{
+    t_variable_symbol *items;
+    size_t count;
+    size_t capacity;
 } t_variable_pool;
 
-typedef struct {
-  t_function_symbol *items;
-  size_t count;
-  size_t capacity;
+typedef struct
+{
+    t_function_symbol *items;
+    size_t count;
+    size_t capacity;
 } t_function_pool;
 
-typedef struct {
-  t_variable_pool variables;
-  t_function_pool functions;
+typedef struct
+{
+    t_variable_pool variables;
+    t_function_pool functions;
 } t_symbol_pools;
 // ========================================== //
 // ===== DECLARATION OF PUBLIC FUNCTIONS ==== //
@@ -214,8 +222,7 @@ t_symtable_result symtable_restore_scope(t_symtable *table, t_scope *scope);
  * scope, SYMTABLE_ERR_NO_SCOPE if no current scope exists, SYMTABLE_ERR_ALLOC
  * on allocation failure, SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_insert_variable(t_symtable *table,
-                                           const t_variable_symbol *symbol,
+t_symtable_result symtable_insert_variable(t_symtable *table, const t_variable_symbol *symbol,
                                            t_symbol_id *out_id);
 
 /**
@@ -234,8 +241,8 @@ t_symtable_result symtable_insert_variable(t_symtable *table,
  *         SYMTABLE_ERR_NO_SCOPE if no current scope exists,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_find_variable(const t_symtable *table,
-                                         const char *name, t_symbol_id *out_id);
+t_symtable_result symtable_find_variable(const t_symtable *table, const char *name,
+                                         t_symbol_id *out_id);
 
 /**
  * Returns a variable symbol stored in the variable pool.
@@ -249,8 +256,7 @@ t_symtable_result symtable_find_variable(const t_symtable *table,
  * @return Pointer to the variable symbol if the ID is valid,
  *         or NULL if the table is NULL or the ID does not exist.
  */
-t_variable_symbol *symtable_get_variable_by_id(t_symtable *table,
-                                               t_symbol_id id);
+t_variable_symbol *symtable_get_variable_by_id(t_symtable *table, t_symbol_id id);
 
 // ----- Functions -----
 
@@ -269,8 +275,7 @@ t_variable_symbol *symtable_get_variable_by_id(t_symtable *table,
  *         SYMTABLE_ERR_ALLOC on allocation failure,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_insert_function(t_symtable *table,
-                                           const t_function_symbol *symbol,
+t_symtable_result symtable_insert_function(t_symtable *table, const t_function_symbol *symbol,
                                            t_symbol_id *out_id);
 
 /**
@@ -289,9 +294,8 @@ t_symtable_result symtable_insert_function(t_symtable *table,
  *         SYMTABLE_ERR_NOT_FOUND if no matching function exists,
  *         SYMTABLE_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_symtable_result symtable_find_function(const t_symtable *table,
-                                         const char *name, bool has_receiver,
-                                         ENUM_DATA_TYPE receiver_type,
+t_symtable_result symtable_find_function(const t_symtable *table, const char *name,
+                                         bool has_receiver, ENUM_DATA_TYPE receiver_type,
                                          t_symbol_id *out_id);
 
 /**
@@ -306,8 +310,7 @@ t_symtable_result symtable_find_function(const t_symtable *table,
  * @return Pointer to the function symbol if the ID is valid,
  *         or NULL if the table is NULL or the ID does not exist.
  */
-t_function_symbol *symtable_get_function_by_id(t_symtable *table,
-                                               t_symbol_id id);
+t_function_symbol *symtable_get_function_by_id(t_symtable *table, t_symbol_id id);
 
 // ----- Pool ownership transfer -----
 

@@ -32,15 +32,17 @@
 // ========================================== //
 
 #define LEXER_MAX_INDENT 256 // max nesting of indented blocks
-#define LEXER_MAX_MODES 64   // max nesting of string / ${...} modes
-                             // (each s"${ level uses two slots)
+#define LEXER_MAX_MODES                                                                            \
+    64 // max nesting of string / ${...} modes
+       // (each s"${ level uses two slots)
 
 /**
  * @brief Return codes of the lexer functions.
  *
  * The numeric values are the compiler exit codes.
  */
-typedef enum {
+typedef enum
+{
     LEX_OK = 0,           // success (*tok holds a valid token, possibly TOKEN_EOF)
     LEX_ERR_LEXICAL = 1,  // lexical error, message already printed
     LEX_ERR_INTERNAL = 99 // malloc failed, internal bug
@@ -64,7 +66,8 @@ typedef enum {
  *   99  right after a single '$' (popped after the id, rewritten to -1 by '{')
  *   -1  inside ${ ... } (code-like, popped by '}')
  */
-typedef enum {
+typedef enum
+{
     LEX_MODE_EXPR = -1,      // inside  ${ ... }  (code-like, '}' ends it)
     LEX_MODE_CODE = 0,       // normal code
     LEX_MODE_ISTR = 1,       // inside  s"..."
@@ -82,7 +85,8 @@ typedef enum {
  * Only the type is public (t_lexer holds one by value). Do not touch the
  * fields from outside the lexer; the strbuf_* functions are in lexer_internal.h.
  */
-typedef struct {
+typedef struct
+{
     char *data;
     size_t len;
     size_t cap;
@@ -93,7 +97,8 @@ typedef struct {
  *
  * Treat as opaque: only the lexer .c files read or write the fields.
  */
-typedef struct {
+typedef struct
+{
     FILE *in;
 
     /* position tracking */

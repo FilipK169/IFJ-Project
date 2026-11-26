@@ -24,8 +24,10 @@
 // ============ PUBLIC FUNCTIONS ============ //
 // ========================================== //
 
-const char *token_type_name(t_token_type type) {
-    switch (type) {
+const char *token_type_name(t_token_type type)
+{
+    switch (type)
+    {
     case TOKEN_EOF:
         return "EOF";
 
@@ -158,35 +160,42 @@ const char *token_type_name(t_token_type type) {
     return "UNKNOWN";
 }
 
-int token_has_string(t_token_type type) {
-    switch (type) {
-        case TOKEN_ID:
-        case TOKEN_STRING_LIT:
-        case TOKEN_ISTR_TEXT:
-        case TOKEN_ISTR_ID:
-            return 1;
-        default:
-            return 0;
+int token_has_string(t_token_type type)
+{
+    switch (type)
+    {
+    case TOKEN_ID:
+    case TOKEN_STRING_LIT:
+    case TOKEN_ISTR_TEXT:
+    case TOKEN_ISTR_ID:
+        return 1;
+    default:
+        return 0;
     }
 }
 
-void token_free(t_token *token) {
-    if (token == NULL) {
+void token_free(t_token *token)
+{
+    if (token == NULL)
+    {
         return;
     }
-    if (token_has_string(token->type)) {
+    if (token_has_string(token->type))
+    {
         free(token->value.str_val);
         token->value.str_val = NULL;
     }
 }
 
-void token_init(t_token *token) {
+void token_init(t_token *token)
+{
     memset(token, 0, sizeof(*token));
     // memset gives str_val == NULL on every platform we target; be explicit anyway.
     token->value.str_val = NULL;
 }
 
-void token_set(t_token *token, t_token_type type, int line, int column) {
+void token_set(t_token *token, t_token_type type, int line, int column)
+{
     memset(token, 0, sizeof(*token));
     token->value.str_val = NULL;
     token->type = type;

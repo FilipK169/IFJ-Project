@@ -44,41 +44,44 @@ typedef void *(*t_copy_fn)(const void *data);
 /**
  * Node of the binary search tree.
  */
-typedef struct t_BST_node {
-  size_t height;
+typedef struct t_BST_node
+{
+    size_t height;
 
-  void *key;
-  void *data;
+    void *key;
+    void *data;
 
-  t_destroy_fn destroy_data;
+    t_destroy_fn destroy_data;
 
-  struct t_BST_node *left_child;
-  struct t_BST_node *right_child;
+    struct t_BST_node *left_child;
+    struct t_BST_node *right_child;
 } t_BST_node;
 
 /**
  * Binary search tree.
  */
-typedef struct t_BST {
-  t_BST_node *root;
+typedef struct t_BST
+{
+    t_BST_node *root;
 
-  size_t size;
+    size_t size;
 
-  t_compare_fn compare_key;
-  t_copy_fn copy_key;
-  t_destroy_fn destroy_key;
+    t_compare_fn compare_key;
+    t_copy_fn copy_key;
+    t_destroy_fn destroy_key;
 } t_BST;
 
 /**
  * Possible results of binary search tree operations.
  */
-typedef enum t_BST_result {
-  BST_OK = 0,
-  BST_ERR_ALLOC,
-  BST_ERR_DUPLICATE_KEY,
-  BST_ERR_NOT_FOUND,
-  BST_ERR_INVALID_ARGUMENT,
-  BST_ERR_MISSING_FUNCTION
+typedef enum t_BST_result
+{
+    BST_OK = 0,
+    BST_ERR_ALLOC,
+    BST_ERR_DUPLICATE_KEY,
+    BST_ERR_NOT_FOUND,
+    BST_ERR_INVALID_ARGUMENT,
+    BST_ERR_MISSING_FUNCTION
 } t_BST_result;
 
 /**
@@ -91,8 +94,7 @@ typedef enum t_BST_result {
  *                    must not be destroyed by the tree.
  * @return Pointer to the newly created tree, NULL on allocation failure.
  */
-t_BST *BST_create(t_compare_fn compare_key, t_copy_fn copy_key,
-                  t_destroy_fn destroy_key);
+t_BST *BST_create(t_compare_fn compare_key, t_copy_fn copy_key, t_destroy_fn destroy_key);
 
 /**
  * Inserts a key-data pair into the tree WITHOUT copying the provided data.
@@ -109,8 +111,7 @@ t_BST *BST_create(t_compare_fn compare_key, t_copy_fn copy_key,
  *         BST_ERR_ALLOC on allocation failure,
  *         BST_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_BST_result BST_insert(t_BST *tree, void *key, void *data,
-                        t_destroy_fn destroy_data);
+t_BST_result BST_insert(t_BST *tree, void *key, void *data, t_destroy_fn destroy_data);
 
 /**
  * Inserts a key-data pair into the tree by creating copies of both.
@@ -128,8 +129,8 @@ t_BST_result BST_insert(t_BST *tree, void *key, void *data,
  *         BST_ERR_ALLOC if copying or allocation fails,
  *         BST_ERR_INVALID_ARGUMENT for invalid arguments.
  */
-t_BST_result BST_insert_copy(t_BST *tree, const void *key, const void *data,
-                             t_copy_fn copy_data, t_destroy_fn destroy_data);
+t_BST_result BST_insert_copy(t_BST *tree, const void *key, const void *data, t_copy_fn copy_data,
+                             t_destroy_fn destroy_data);
 
 /**
  * Removes an item from the tree and destroys its key and data.
@@ -146,7 +147,7 @@ t_BST_result BST_remove(t_BST *tree, const void *key);
  * Removes an item from the tree without destroying its stored data.
  *
  * Ownership of the returned data is transferred to the caller.
- * 
+ *
  * if out_data is NULL it destroys them
  *
  * @param tree Pointer to the binary search tree.
