@@ -5,9 +5,6 @@
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
  *
- * @author Vojtěch Kabelka (xkabelv00)
- * @author Martin Kolouch (xkoloum00)
- * @author Ondřej Vondra (274921)
  * @author Filip Kachyňa (xkachyf00)
  */
 
@@ -447,6 +444,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         return 1;
     }
 
+    // Initialization of function variables
     function_globals *func_globals = malloc(sizeof(function_globals));
     if (func_globals == NULL)
     {
@@ -474,6 +472,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         func_globals->returns_unit = false;
     }
 
+    // Putting together the string used for naming this function's label
     const char *base_function_name = function->name;
     bool has_receiver = !function->is_main && function->receiver != NULL;
     if (base_function_name == NULL)
@@ -565,6 +564,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
             var_list = var_node_new;
         }
 
+        // Declares parameter variables
         for (size_t i = 0; i < function->param_list_count; i++)
         {
             AST_PARAM_LIST *param_list = &function->param_lists[i];
@@ -595,6 +595,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
             }
         }
 
+        // Assigns values to parameter variables
         for (size_t i = function->param_list_count; i > 0; i--)
         {
             AST_PARAM_LIST *param_list = &function->param_lists[i - 1];
@@ -613,8 +614,10 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         }
     }
 
+    // Variable used for discarding stray values on stack
     buffer_printf(&func_globals->function_head, "DEFVAR %s$discard\n", func_globals->var_prefix);
 
+    // Generates the body of a function
     for (size_t i = 0; i < function->body->statement_count; i++)
     {
         AST_STATEMENT *statement = function->body->statements[i];
@@ -648,10 +651,12 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
             free(func_globals);
             return 1;
         }
+        // Prints returned Unit for a Unit function
         if (is_last && func_globals->returns_unit && statement->type != STMT_RETURN)
         {
             buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
         }
+        // Ends the function if no return is present
         if (is_last && statement->type != STMT_RETURN)
         {
             if (func_globals->is_main)
@@ -666,12 +671,14 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         }
     }
 
+    // Returns Unit from an empty function
     if (function->body->statement_count == 0 && func_globals->returns_unit &&
         !func_globals->is_main)
     {
         buffer_printf(&func_globals->function_body, "PUSHS nil@nil\n");
     }
 
+    // Ends an empty function
     if (function->body->statement_count == 0)
     {
         if (func_globals->is_main)
@@ -701,6 +708,7 @@ static int generate_function(AST_FUNCTION_DEF *function, builtins_checklist *bui
         return 1;
     }
 
+    // Prints the generated code saved in a buffer
     bool output_failed = false;
     if (func_globals->function_head.length > 0 &&
         fwrite(func_globals->function_head.data, 1, func_globals->function_head.length, stdout) !=
@@ -780,7 +788,7 @@ static int generate_statement(AST_STATEMENT *statement, function_globals *func_g
         {
             return 1;
         }
-        if (discard_result)
+        if (discard_result) // Discards the value left by a non-last expression
         {
             buffer_printf(&func_globals->function_body, "POPS %s$discard\n",
                           func_globals->var_prefix);
@@ -833,6 +841,7 @@ static int generate_assignment(AST_ASSIGNMENT *assignment, function_globals *fun
         return 1;
     }
 
+    // Finds mangling of the variable we assign to
     size_t local_mangling = find_variable(*var_list, assignment->name);
     if (local_mangling == SIZE_MAX)
     {
@@ -1557,6 +1566,7 @@ static int generate_call(AST_CALL *call, function_globals *func_globals, var_lis
         }
     }
 
+    // Pushes function arguments onto a stack
     for (size_t i = 0; i < call->argument_list_count; i++)
     {
         AST_ARG_LIST *arg_list = &call->argument_lists[i];
@@ -1719,6 +1729,7 @@ static int generate_interpolated(AST_INTERPOLATED *interpolated, function_global
     buffer_printf(&func_globals->function_head, "DEFVAR %s$istr$%zu$part\n",
                   func_globals->var_prefix, local_istr);
 
+    // Concatenates together the parts of an interpolated string
     for (size_t i = 0; i < interpolated->part_count; i++)
     {
         char *target = i == 0 ? "str" : "part";
@@ -1786,11 +1797,12 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
 
     buffer_printf(&func_globals->function_body, "PUSHS bool@true\n");
     if (if_stmt->else_block == NULL)
-    {
+    { // if-then
         buffer_printf(&func_globals->function_body, "JUMPIFNEQS %s$if$%zu$end\n",
                       func_globals->function_name, local_if);
         func_globals->var_mangling_counter++;
         func_globals->var_mangling = func_globals->var_mangling_counter;
+        // Generates 'then' block
         for (size_t i = 0; i < if_stmt->then_block->statement_count; i++)
         {
             AST_STATEMENT *statement = if_stmt->then_block->statements[i];
@@ -1814,11 +1826,12 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
         }
     }
     else
-    {
+    { // if-then-else
         buffer_printf(&func_globals->function_body, "JUMPIFEQS %s$if$%zu\n",
                       func_globals->function_name, local_if);
         func_globals->var_mangling_counter++;
         func_globals->var_mangling = func_globals->var_mangling_counter;
+        // Generates 'else' block
         for (size_t i = 0; i < if_stmt->else_block->statement_count; i++)
         {
             AST_STATEMENT *statement = if_stmt->else_block->statements[i];
@@ -1853,6 +1866,7 @@ static int generate_if(AST_IF *if_stmt, function_globals *func_globals, var_list
                       func_globals->function_name, local_if);
         func_globals->var_mangling_counter++;
         func_globals->var_mangling = func_globals->var_mangling_counter;
+        // Generates 'then' block
         for (size_t i = 0; i < if_stmt->then_block->statement_count; i++)
         {
             AST_STATEMENT *statement = if_stmt->then_block->statements[i];
@@ -1914,6 +1928,7 @@ static int generate_while(AST_WHILE *while_stmt, function_globals *func_globals,
                   func_globals->function_name, local_while);
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
+    // Generates the body of a while cycle
     for (size_t i = 0; i < while_stmt->body->statement_count; i++)
     {
         AST_STATEMENT *statement = while_stmt->body->statements[i];
@@ -1954,6 +1969,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     func_globals->for_counter++;
     size_t local_for = func_globals->for_counter;
 
+    // Declares cycle variables
     buffer_printf(&func_globals->function_head, "DEFVAR %s$for$%zu$to\n", func_globals->var_prefix,
                   local_for);
     buffer_printf(&func_globals->function_head, "DEFVAR %s$for$%zu$step\n",
@@ -1964,7 +1980,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     size_t prev_mangling = func_globals->var_mangling;
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
-
+    // Assigns value to iterator
     if (generate_expression(for_stmt->from, func_globals, var_list, builtins) != 0)
     {
         return 1;
@@ -1972,6 +1988,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     buffer_printf(&func_globals->function_body, "POPS %s%s$%zu\n", func_globals->var_prefix,
                   for_stmt->var_name, func_globals->var_mangling);
 
+    // Assigns value to 'to'
     if (generate_expression(for_stmt->to, func_globals, var_list, builtins) != 0)
     {
         return 1;
@@ -1980,7 +1997,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
                   local_for);
 
     if (for_stmt->step != NULL)
-    {
+    { // Assigns value to 'step' and checks if it does not equal 0
         if (generate_expression(for_stmt->step, func_globals, var_list, builtins) != 0)
         {
             return 1;
@@ -1999,6 +2016,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
                       func_globals->var_prefix, local_for);
     }
 
+    // Declares iterator
     buffer_printf(&func_globals->function_head, "DEFVAR %s%s$%zu\n", func_globals->var_prefix,
                   for_stmt->var_name, func_globals->var_mangling);
 
@@ -2014,14 +2032,16 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
 
     buffer_printf(&func_globals->function_body, "LABEL %s$for$%zu$loop\n",
                   func_globals->function_name, local_for);
+    // Checks if 'step' is 0
     buffer_printf(&func_globals->function_body, "LT %s$for$%zu$check %s$for$%zu$step int@0\n",
                   func_globals->var_prefix, local_for, func_globals->var_prefix, local_for);
+    // Checks if 'step' is negative
     buffer_printf(&func_globals->function_body,
                   "JUMPIFEQ %s$for$%zu$negative %s$for$%zu$check bool@true\n",
                   func_globals->function_name, local_for, func_globals->var_prefix, local_for);
 
     if (for_stmt->is_exclusive)
-    {
+    { // Checks if 'iterator >= to'
         buffer_printf(&func_globals->function_body, "LT %s$for$%zu$check %s%s$%zu %s$for$%zu$to\n",
                       func_globals->var_prefix, local_for, func_globals->var_prefix,
                       for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix,
@@ -2031,7 +2051,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
                       func_globals->function_name, local_for, func_globals->var_prefix, local_for);
     }
     else
-    {
+    { // Checks if 'iterator > to'
         buffer_printf(&func_globals->function_body, "GT %s$for$%zu$check %s%s$%zu %s$for$%zu$to\n",
                       func_globals->var_prefix, local_for, func_globals->var_prefix,
                       for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix,
@@ -2046,7 +2066,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     buffer_printf(&func_globals->function_body, "LABEL %s$for$%zu$negative\n",
                   func_globals->function_name, local_for);
     if (for_stmt->is_exclusive)
-    {
+    { // Checks if 'iterator <= to'
         buffer_printf(&func_globals->function_body, "GT %s$for$%zu$check %s%s$%zu %s$for$%zu$to\n",
                       func_globals->var_prefix, local_for, func_globals->var_prefix,
                       for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix,
@@ -2056,7 +2076,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
                       func_globals->function_name, local_for, func_globals->var_prefix, local_for);
     }
     else
-    {
+    { // Checks if 'iterator < to'
         buffer_printf(&func_globals->function_body, "LT %s$for$%zu$check %s%s$%zu %s$for$%zu$to\n",
                       func_globals->var_prefix, local_for, func_globals->var_prefix,
                       for_stmt->var_name, func_globals->var_mangling, func_globals->var_prefix,
@@ -2068,6 +2088,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
 
     buffer_printf(&func_globals->function_body, "LABEL %s$for$%zu$body\n",
                   func_globals->function_name, local_for);
+    // Generates guards
     for (size_t i = 0; i < for_stmt->guard_count; i++)
     {
         AST_EXPRESSION *guard = for_stmt->guards[i];
@@ -2087,6 +2108,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     size_t pre_body_mangling = func_globals->var_mangling;
     func_globals->var_mangling_counter++;
     func_globals->var_mangling = func_globals->var_mangling_counter;
+    // Generates the body of a for cycle
     for (size_t i = 0; i < for_stmt->body->statement_count; i++)
     {
         AST_STATEMENT *statement = for_stmt->body->statements[i];
@@ -2103,6 +2125,7 @@ static int generate_for(AST_FOR *for_stmt, function_globals *func_globals, var_l
     buffer_printf(&func_globals->function_body, "LABEL %s$for$%zu$skip\n",
                   func_globals->function_name, local_for);
 
+    // Increments iterator by step
     func_globals->var_mangling = pre_body_mangling;
     buffer_printf(&func_globals->function_body, "ADD %s%s$%zu %s%s$%zu %s$for$%zu$step\n",
                   func_globals->var_prefix, for_stmt->var_name, func_globals->var_mangling,
@@ -2167,7 +2190,7 @@ static char *convert_string(const char *string, size_t length)
             conv_len = 0;
         }
     }
-
+    // Goes through the string and converts special characters into their ASCII code
     for (size_t i = 0; i < length; i++)
     {
         unsigned char character = (unsigned char)string[i];
@@ -2481,6 +2504,7 @@ int generate_code(AST_PROGRAM *program)
     printf(".IFJcode26\n\n");
     printf("JUMP $main\n\n");
 
+    // Initializes the builtins checklist
     builtins_checklist *builtins = malloc(sizeof(builtins_checklist));
     if (builtins == NULL)
     {
@@ -2497,6 +2521,7 @@ int generate_code(AST_PROGRAM *program)
     builtins->ord = false;
     builtins->floor = false;
 
+    // Generates functions
     for (size_t i = 0; i < program->function_count; i++)
     {
         AST_FUNCTION_DEF *function = program->functions[i];
@@ -2515,6 +2540,7 @@ int generate_code(AST_PROGRAM *program)
 
     printf("\n");
 
+    // Generates used builtin functions
     if (builtins->print)
     {
         if (builtin_print() != 0)

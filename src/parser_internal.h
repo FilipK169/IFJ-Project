@@ -7,10 +7,7 @@
  * Project: Implementace překladače jazyka IFJ26.
  * Academic year: 2026/2027
  *
- * @author Vojtěch Kabelka (xkabelv00)
- * @author Martin Kolouch (xkoloum00)
  * @author Ondřej Vondra (x274921)
- * @author Filip Kachyňa (xkachyf00)
  */
 
 #ifndef PARSER_INTERNAL_H
